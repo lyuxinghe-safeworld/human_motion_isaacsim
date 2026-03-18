@@ -5,6 +5,10 @@ import torch
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from protomotions.simulator.base_simulator.simulator_state import (
+    ResetState, StateConversion,
+)
+
 
 def _make_fake_articulation(body_names=None, dof_names=None):
     from hymotion_isaacsim.binding import EXPECTED_SMPL_BODY_NAMES, EXPECTED_SMPL_JOINT_NAMES
@@ -41,3 +45,215 @@ class TestIsaacSimSimulatorConstruction:
         ordering = adapter._get_sim_body_ordering()
         assert ordering.body_names == ["Pelvis", "L_Hip", "R_Hip"]
         assert ordering.dof_names == ["L_Hip_x", "L_Hip_y", "R_Hip_x"]
+
+
+class TestStateGetters:
+    def test_get_simulator_root_state_returns_root_only_state(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        art = _make_fake_articulation()
+        art.get_world_poses.return_value = (
+            torch.tensor([[1.0, 2.0, 3.0]]),
+            torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+        )
+        art.get_velocities.return_value = torch.tensor([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]])
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        state = adapter._get_simulator_root_state()
+        assert state.root_pos.shape == (1, 3)
+        assert state.root_rot.shape == (1, 4)
+        assert state.root_vel.shape == (1, 3)
+        assert state.root_ang_vel.shape == (1, 3)
+        assert state.state_conversion == StateConversion.SIMULATOR
+
+    def test_get_simulator_root_state_with_env_ids(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        art = _make_fake_articulation()
+        art.get_world_poses.return_value = (
+            torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+            torch.tensor([[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]),
+        )
+        art.get_velocities.return_value = torch.tensor([
+            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+            [0.7, 0.8, 0.9, 1.0, 1.1, 1.2],
+        ])
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        adapter.num_envs = 2
+        state = adapter._get_simulator_root_state(env_ids=torch.tensor([0]))
+        assert state.root_pos.shape == (1, 3)
+
+    def test_get_simulator_dof_state_returns_robot_state(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        num_dof = 69
+        art = _make_fake_articulation()
+        art.get_joint_positions.return_value = torch.zeros((1, num_dof))
+        art.get_joint_velocities.return_value = torch.zeros((1, num_dof))
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        state = adapter._get_simulator_dof_state()
+        assert state.dof_pos.shape == (1, num_dof)
+        assert state.dof_vel.shape == (1, num_dof)
+        assert state.state_conversion == StateConversion.SIMULATOR
+
+    def test_get_simulator_dof_forces_returns_robot_state(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        num_dof = 69
+        art = _make_fake_articulation()
+        art.get_measured_joint_forces.return_value = torch.zeros((1, num_dof))
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        state = adapter._get_simulator_dof_forces()
+        assert state.dof_forces.shape == (1, num_dof)
+        assert state.state_conversion == StateConversion.SIMULATOR
+
+    def test_get_simulator_dof_limits_for_verification(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        num_dof = 69
+        art = _make_fake_articulation()
+        limits = torch.zeros((1, num_dof, 2))
+        limits[..., 0] = -3.14
+        limits[..., 1] = 3.14
+        art.get_dof_limits.return_value = limits
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        lower, upper = adapter._get_simulator_dof_limits_for_verification()
+        assert lower.shape == (num_dof,)
+        assert upper.shape == (num_dof,)
+        assert torch.allclose(lower, torch.tensor([-3.14]).expand(num_dof))
+        assert torch.allclose(upper, torch.tensor([3.14]).expand(num_dof))
+
+    def test_get_simulator_object_root_state_returns_empty(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        state = adapter._get_simulator_object_root_state()
+        assert state.root_pos is not None
+        assert state.root_pos.shape == (1, 0, 3)
+        assert state.root_rot.shape == (1, 0, 4)
+        assert state.root_vel.shape == (1, 0, 3)
+        assert state.root_ang_vel.shape == (1, 0, 3)
+        assert state.state_conversion == StateConversion.SIMULATOR
+
+    def test_get_simulator_object_contact_buf_returns_empty(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        state = adapter._get_simulator_object_contact_buf()
+        assert state.contact_forces is not None
+        assert state.contact_forces.shape == (1, 0, 3)
+        assert state.state_conversion == StateConversion.SIMULATOR
+
+
+class TestStateSetterAndControl:
+    def test_set_simulator_env_state_writes_to_articulation(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        art = _make_fake_articulation()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        new_states = ResetState(
+            root_pos=torch.zeros((1, 3)),
+            root_rot=torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+            root_vel=torch.zeros((1, 3)),
+            root_ang_vel=torch.zeros((1, 3)),
+            dof_pos=torch.zeros((1, 69)),
+            dof_vel=torch.zeros((1, 69)),
+            state_conversion=StateConversion.SIMULATOR,
+        )
+        adapter._set_simulator_env_state(new_states, env_ids=torch.tensor([0]))
+        art.set_world_poses.assert_called_once()
+        art.set_joint_positions.assert_called_once()
+        art.set_joint_velocities.assert_called_once()
+        art.set_velocities.assert_called_once()
+        art.set_joint_position_targets.assert_called_once()
+
+    def test_apply_simulator_pd_targets_calls_articulation(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        art = _make_fake_articulation()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        targets = torch.zeros((1, 69))
+        adapter._apply_simulator_pd_targets(targets)
+        art.set_joint_position_targets.assert_called_once()
+
+    def test_apply_simulator_torques_calls_articulation(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        art = _make_fake_articulation()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        torques = torch.zeros((1, 69))
+        adapter._apply_simulator_torques(torques)
+        art.set_joint_efforts.assert_called_once()
+
+    def test_apply_root_velocity_impulse_sets_velocity(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        art = _make_fake_articulation()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        lin_vel = torch.tensor([[1.0, 0.0, 0.0]])
+        ang_vel = torch.tensor([[0.0, 0.0, 1.0]])
+        env_ids = torch.tensor([0])
+        adapter._apply_root_velocity_impulse(lin_vel, ang_vel, env_ids)
+        art.set_velocities.assert_called_once()
+        # Verify the concatenated tensor shape
+        call_args = art.set_velocities.call_args[0][0]
+        assert call_args.shape == (1, 6)
+
+    def test_physics_step_calls_world_step_decimation_times(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        world = MagicMock()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._world = world
+        adapter._articulation = _make_fake_articulation()
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        adapter.decimation = 4
+        adapter.headless = True
+        adapter._common_actions = torch.zeros((1, 69))
+        adapter._apply_control = MagicMock()
+        adapter._physics_step()
+        assert world.step.call_count == 4
+        assert adapter._apply_control.call_count == 4
+
+    def test_physics_step_renders_when_not_headless(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        world = MagicMock()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._world = world
+        adapter._articulation = _make_fake_articulation()
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        adapter.decimation = 2
+        adapter.headless = False
+        adapter._common_actions = torch.zeros((1, 69))
+        adapter._apply_control = MagicMock()
+        adapter._physics_step()
+        assert world.step.call_count == 2
+        world.render.assert_called_once()
+
+    def test_close_calls_simulation_app(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        sim_app = MagicMock()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._simulation_app = sim_app
+        adapter._simulation_running = True
+        adapter.close()
+        sim_app.close.assert_called_once()
+        assert adapter._simulation_running is False
+
+    def test_init_camera_is_noop(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        # Should not raise
+        adapter._init_camera()

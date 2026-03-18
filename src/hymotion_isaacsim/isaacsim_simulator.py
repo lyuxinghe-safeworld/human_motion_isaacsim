@@ -13,6 +13,7 @@ from protomotions.simulator.base_simulator.simulator_state import (
     RootOnlyState,
     ObjectState,
     ResetState,
+    StateConversion,
 )
 from protomotions.robot_configs.base import RobotConfig
 from protomotions.components.scene_lib import SceneLib
@@ -26,9 +27,6 @@ class IsaacSimSimulator(Simulator):
     ``__init__``. Callers must set ``self._world``, ``self._articulation``, and
     ``self._simulation_app`` **before** ``super().__init__()`` is invoked, which is
     why those assignments appear at the top of ``__init__``.
-
-    All simulation-heavy abstract methods are stubbed with ``NotImplementedError``; they
-    will be filled in by subsequent tasks.
     """
 
     def __init__(
@@ -73,7 +71,7 @@ class IsaacSimSimulator(Simulator):
 
     def close(self) -> None:
         """Close the simulator and the Isaac Sim application."""
-        super().close()
+        self._simulation_running = False
         self._simulation_app.close()
 
     # ------------------------------------------------------------------
@@ -83,14 +81,24 @@ class IsaacSimSimulator(Simulator):
     def _get_simulator_dof_limits_for_verification(
         self,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        raise NotImplementedError
+        """Return (lower_limits, upper_limits) as 1-D tensors from the articulation."""
+        dof_limits = self._articulation.get_dof_limits()
+        # dof_limits shape: [N, num_dof, 2] — take first env, split lower/upper
+        lower = dof_limits[0, :, 0].to(self.device)
+        upper = dof_limits[0, :, 1].to(self.device)
+        return lower, upper
 
     # ------------------------------------------------------------------
     # Group 3: Simulation Steps
     # ------------------------------------------------------------------
 
     def _physics_step(self) -> None:
-        raise NotImplementedError
+        """Advance the simulation by ``self.decimation`` sub-steps."""
+        for _ in range(self.decimation):
+            self._apply_control()
+            self._world.step(render=False)
+        if not self.headless:
+            self._world.render()
 
     def _set_simulator_env_state(
         self,
@@ -98,7 +106,17 @@ class IsaacSimSimulator(Simulator):
         new_object_states: Optional[ObjectState] = None,
         env_ids: Optional[torch.Tensor] = None,
     ) -> None:
-        raise NotImplementedError
+        """Write root pose, root velocity, joint positions/velocities to the articulation."""
+        self._articulation.set_world_poses(
+            positions=new_states.root_pos,
+            orientations=new_states.root_rot,
+        )
+        self._articulation.set_velocities(
+            torch.cat([new_states.root_vel, new_states.root_ang_vel], dim=-1)
+        )
+        self._articulation.set_joint_positions(new_states.dof_pos)
+        self._articulation.set_joint_velocities(new_states.dof_vel)
+        self._articulation.set_joint_position_targets(new_states.dof_pos)
 
     def _apply_root_velocity_impulse(
         self,
@@ -106,7 +124,9 @@ class IsaacSimSimulator(Simulator):
         angular_velocity: torch.Tensor,
         env_ids: torch.Tensor,
     ) -> None:
-        raise NotImplementedError
+        """Set root velocities on the articulation for the given environments."""
+        vel = torch.cat([linear_velocity, angular_velocity], dim=-1)
+        self._articulation.set_velocities(vel)
 
     # ------------------------------------------------------------------
     # Group 4: State Getters
@@ -115,22 +135,90 @@ class IsaacSimSimulator(Simulator):
     def _get_simulator_root_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RootOnlyState:
-        raise NotImplementedError
+        """Read root pose/velocity from the articulation and return a ``RootOnlyState``."""
+        positions, quaternions = self._articulation.get_world_poses()
+        velocities = self._articulation.get_velocities()
+
+        root_pos = positions
+        root_rot = quaternions
+        root_vel = velocities[:, :3]
+        root_ang_vel = velocities[:, 3:]
+
+        if env_ids is not None:
+            root_pos = root_pos[env_ids]
+            root_rot = root_rot[env_ids]
+            root_vel = root_vel[env_ids]
+            root_ang_vel = root_ang_vel[env_ids]
+
+        return RootOnlyState(
+            root_pos=root_pos,
+            root_rot=root_rot,
+            root_vel=root_vel,
+            root_ang_vel=root_ang_vel,
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     def _get_simulator_bodies_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        raise NotImplementedError
+        """Read per-link transforms and velocities from the articulation view."""
+        # Access the underlying articulation view for per-body data
+        art_view = self._articulation._articulation_view
+
+        # get_link_transforms returns [N, num_bodies, 7] (pos xyz + quat wxyz)
+        link_transforms = art_view.get_link_transforms()
+        body_pos = link_transforms[:, :, :3]
+        body_rot = link_transforms[:, :, 3:]
+
+        # get_link_velocities returns [N, num_bodies, 6] (lin_vel xyz + ang_vel xyz)
+        link_velocities = art_view.get_link_velocities()
+        body_vel = link_velocities[:, :, :3]
+        body_ang_vel = link_velocities[:, :, 3:]
+
+        if env_ids is not None:
+            body_pos = body_pos[env_ids]
+            body_rot = body_rot[env_ids]
+            body_vel = body_vel[env_ids]
+            body_ang_vel = body_ang_vel[env_ids]
+
+        return RobotState(
+            rigid_body_pos=body_pos,
+            rigid_body_rot=body_rot,
+            rigid_body_vel=body_vel,
+            rigid_body_ang_vel=body_ang_vel,
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     def _get_simulator_dof_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        raise NotImplementedError
+        """Read joint positions and velocities from the articulation."""
+        dof_pos = self._articulation.get_joint_positions()
+        dof_vel = self._articulation.get_joint_velocities()
+
+        if env_ids is not None:
+            dof_pos = dof_pos[env_ids]
+            dof_vel = dof_vel[env_ids]
+
+        return RobotState(
+            dof_pos=dof_pos,
+            dof_vel=dof_vel,
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     def _get_simulator_dof_forces(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        raise NotImplementedError
+        """Read measured joint forces from the articulation."""
+        dof_forces = self._articulation.get_measured_joint_forces()
+
+        if env_ids is not None:
+            dof_forces = dof_forces[env_ids]
+
+        return RobotState(
+            dof_forces=dof_forces,
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     def _get_simulator_bodies_contact_buf(
         self, env_ids: Optional[torch.Tensor] = None
@@ -140,22 +228,37 @@ class IsaacSimSimulator(Simulator):
     def _get_simulator_object_root_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> ObjectState:
-        raise NotImplementedError
+        """Return empty object state (no scene objects in this adapter)."""
+        n = self.num_envs if env_ids is None else len(env_ids)
+        return ObjectState(
+            root_pos=torch.zeros(n, 0, 3, device=self.device),
+            root_rot=torch.zeros(n, 0, 4, device=self.device),
+            root_vel=torch.zeros(n, 0, 3, device=self.device),
+            root_ang_vel=torch.zeros(n, 0, 3, device=self.device),
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     def _get_simulator_object_contact_buf(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> ObjectState:
-        raise NotImplementedError
+        """Return empty object contact state (no scene objects in this adapter)."""
+        n = self.num_envs if env_ids is None else len(env_ids)
+        return ObjectState(
+            contact_forces=torch.zeros(n, 0, 3, device=self.device),
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     # ------------------------------------------------------------------
     # Group 5: Control
     # ------------------------------------------------------------------
 
     def _apply_simulator_pd_targets(self, pd_targets: torch.Tensor) -> None:
-        raise NotImplementedError
+        """Apply PD position targets to the articulation."""
+        self._articulation.set_joint_position_targets(pd_targets)
 
     def _apply_simulator_torques(self, torques: torch.Tensor) -> None:
-        raise NotImplementedError
+        """Apply raw torques to the articulation."""
+        self._articulation.set_joint_efforts(torques)
 
     # ------------------------------------------------------------------
     # Group 6: Rendering & Visualization
@@ -165,7 +268,8 @@ class IsaacSimSimulator(Simulator):
         raise NotImplementedError
 
     def _init_camera(self) -> None:
-        raise NotImplementedError
+        """Initialize camera view. No-op for now; can be extended later."""
+        pass
 
     def _update_simulator_markers(
         self, markers_state: Optional[Dict] = None

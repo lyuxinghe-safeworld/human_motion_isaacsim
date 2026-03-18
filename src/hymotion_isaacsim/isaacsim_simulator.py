@@ -45,6 +45,8 @@ class IsaacSimSimulator(Simulator):
         self._world = world
         self._articulation = articulation
         self._simulation_app = simulation_app
+        self._contact_sensors: Dict = {}
+        self._contact_body_prim_paths: list = []
 
         super().__init__(
             config=config,
@@ -220,10 +222,59 @@ class IsaacSimSimulator(Simulator):
             state_conversion=StateConversion.SIMULATOR,
         )
 
+    def setup_contact_sensors(self, body_prim_paths: list) -> None:
+        """Create ContactSensor objects for each body prim path and store them.
+
+        The sensors are keyed by prim path so they can be queried later in
+        ``_get_simulator_bodies_contact_buf``.  This method requires a running
+        Isaac Sim instance because it imports ``omni.isaac.sensor``.
+
+        Args:
+            body_prim_paths: List of USD prim paths for which to create sensors.
+        """
+        from omni.isaac.sensor import ContactSensor  # type: ignore[import]
+
+        self._contact_body_prim_paths = list(body_prim_paths)
+        self._contact_sensors = {}
+        for path in self._contact_body_prim_paths:
+            sensor = ContactSensor(prim_path=path)
+            self._contact_sensors[path] = sensor
+
     def _get_simulator_bodies_contact_buf(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        raise NotImplementedError
+        """Return contact forces as a ``(num_envs, num_bodies, 3)`` tensor.
+
+        If no contact sensors have been configured (``_contact_sensors`` is
+        empty), a zero tensor is returned.  This is the correct behaviour for
+        policies that do not use contact information.
+
+        When sensors are available the force reading from each sensor is stacked
+        in body order.  The result is always moved to ``self.device``.
+        """
+        n = self.num_envs if env_ids is None else len(env_ids)
+
+        if not self._contact_sensors:
+            return torch.zeros(n, self._num_bodies, 3, device=self.device)
+
+        forces = []
+        for path in self._contact_body_prim_paths:
+            sensor = self._contact_sensors[path]
+            # get_contact_force returns a (3,) or (N, 3) tensor depending on
+            # the Isaac Sim version; we normalise to (N, 1, 3).
+            force = sensor.get_contact_force()
+            if force.dim() == 1:
+                # Shape (3,) — broadcast across all envs
+                force = force.unsqueeze(0).expand(n, -1)
+            force = force.unsqueeze(1)  # (N, 1, 3)
+            forces.append(force)
+
+        contact_buf = torch.cat(forces, dim=1)  # (N, num_bodies, 3)
+
+        if env_ids is not None:
+            contact_buf = contact_buf[env_ids]
+
+        return contact_buf.to(self.device)
 
     def _get_simulator_object_root_state(
         self, env_ids: Optional[torch.Tensor] = None
@@ -265,7 +316,21 @@ class IsaacSimSimulator(Simulator):
     # ------------------------------------------------------------------
 
     def _write_viewport_to_file(self, file_name: str) -> None:
-        raise NotImplementedError
+        """Capture the current viewport render to a file.
+
+        Lazily acquires the active viewport API on first call, then delegates
+        to ``self._capture_viewport`` (which may be overridden in tests) or to
+        ``omni.kit.viewport.utility.capture_viewport_to_file`` in real usage.
+        """
+        if not hasattr(self, '_viewport_api') or self._viewport_api is None:
+            from omni.kit.viewport.utility import get_active_viewport
+            self._viewport_api = get_active_viewport()
+
+        if hasattr(self, '_capture_viewport') and callable(self._capture_viewport):
+            self._capture_viewport(self._viewport_api, file_name)
+        else:
+            import omni.kit.viewport.utility as vp_utils
+            vp_utils.capture_viewport_to_file(self._viewport_api, file_name)
 
     def _init_camera(self) -> None:
         """Initialize camera view. No-op for now; can be extended later."""
@@ -274,4 +339,5 @@ class IsaacSimSimulator(Simulator):
     def _update_simulator_markers(
         self, markers_state: Optional[Dict] = None
     ) -> None:
-        raise NotImplementedError
+        """No-op. Visualization markers are optional and not yet supported."""
+        pass  # Markers not supported in pure Isaac Sim adapter

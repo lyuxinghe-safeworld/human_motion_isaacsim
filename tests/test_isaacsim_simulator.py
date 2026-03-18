@@ -257,3 +257,38 @@ class TestStateSetterAndControl:
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         # Should not raise
         adapter._init_camera()
+
+
+class TestViewportAndMarkers:
+    def test_write_viewport_to_file_uses_viewport_api(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        # Pre-set a mock viewport API so the method doesn't try to import omni
+        mock_vp = MagicMock()
+        adapter._viewport_api = mock_vp
+        adapter._capture_viewport = MagicMock()
+        adapter._write_viewport_to_file("/tmp/test_frame.png")
+        # Verify the capture was called with the viewport API and file path
+        adapter._capture_viewport.assert_called_once_with(mock_vp, "/tmp/test_frame.png")
+
+    def test_update_simulator_markers_does_not_raise(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._update_simulator_markers(None)
+        adapter._update_simulator_markers({})
+
+
+class TestContactSensors:
+    def test_get_simulator_bodies_contact_buf_returns_zeros_without_sensors(self):
+        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        num_bodies = 24
+        art = _make_fake_articulation()
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter._articulation = art
+        adapter.device = "cpu"
+        adapter.num_envs = 1
+        adapter._num_bodies = num_bodies
+        adapter._contact_sensors = {}
+        buf = adapter._get_simulator_bodies_contact_buf()
+        assert buf.shape == (1, num_bodies, 3)
+        assert (buf == 0).all()

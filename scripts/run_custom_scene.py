@@ -91,6 +91,151 @@ def run_standalone(world, simulation_app, headless: bool):
         simulation_app.close()
 
 
+def run_protomotions(
+    world,
+    articulation,
+    simulation_app,
+    tracker_assets,
+    motion_file: str,
+    checkpoint_path: str,
+    headless: bool,
+    video_output: str | None,
+):
+    """Run ProtoMotions agent to control the humanoid in our custom Isaac Sim scene."""
+    from copy import deepcopy
+    from dataclasses import asdict
+
+    from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
+
+    ensure_protomotions_importable()
+
+    # Disable torch.compile warmup (same rationale as protomotions_runtime.py)
+    from protomotions.envs.managers import base_manager as base_manager_module
+
+    base_manager_module.TORCH_COMPILE_AVAILABLE = False
+
+    from lightning.fabric import Fabric
+    from protomotions.utils.fabric_config import FabricConfig
+    from protomotions.utils.hydra_replacement import get_class
+    from protomotions.utils.inference_utils import apply_backward_compatibility_fixes
+    from protomotions.components.scene_lib import SceneLib
+    from protomotions.components.motion_lib import MotionLib
+
+    from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+    from hymotion_isaacsim.motion_file import load_motion_metadata
+    from hymotion_isaacsim.recording import compile_video, frame_path_for_step
+
+    # --- Fabric (single device, no DDP) ---
+    fabric = Fabric(
+        **asdict(
+            FabricConfig(
+                devices=1,
+                num_nodes=1,
+                strategy="auto",
+                loggers=[],
+                callbacks=[],
+            )
+        )
+    )
+    fabric.launch()
+
+    # --- Deep-copy configs from checkpoint ---
+    robot_config = deepcopy(tracker_assets.robot_config)
+    simulator_config = deepcopy(tracker_assets.simulator_config)
+    motion_lib_config = deepcopy(tracker_assets.motion_lib_config)
+    env_config = deepcopy(tracker_assets.env_config)
+    agent_config = deepcopy(tracker_assets.agent_config)
+
+    apply_backward_compatibility_fixes(robot_config, simulator_config, env_config)
+
+    # --- Override configs for single-env custom scene ---
+    simulator_config.num_envs = 1
+    simulator_config.headless = headless
+    motion_lib_config.motion_file = str(Path(motion_file).resolve())
+
+    # Compute max_steps from motion metadata
+    motion_metadata = load_motion_metadata(motion_file)
+    sim_fps = getattr(simulator_config.sim, "fps", 30)
+    max_steps = int(motion_metadata.duration_seconds * sim_fps)
+
+    if hasattr(env_config, "max_episode_length"):
+        env_config.max_episode_length = max(env_config.max_episode_length, max_steps + 100)
+
+    # --- Create empty SceneLib and MotionLib from motion file ---
+    scene_lib = SceneLib.empty(num_envs=1, device=str(fabric.device))
+    motion_lib = MotionLib(motion_lib_config, device=str(fabric.device))
+
+    # --- Create our IsaacSimSimulator adapter ---
+    simulator = IsaacSimSimulator(
+        world=world,
+        articulation=articulation,
+        simulation_app=simulation_app,
+        config=simulator_config,
+        robot_config=robot_config,
+        scene_lib=scene_lib,
+        device=fabric.device,
+        terrain=None,
+    )
+    simulator._initialize_with_markers({})
+
+    # --- Create Env ---
+    EnvClass = get_class(env_config._target_)
+    env = EnvClass(
+        config=env_config,
+        robot_config=robot_config,
+        device=fabric.device,
+        terrain=None,
+        scene_lib=scene_lib,
+        motion_lib=motion_lib,
+        simulator=simulator,
+    )
+
+    # --- Create Agent, load weights ---
+    AgentClass = get_class(agent_config._target_)
+    agent = AgentClass(
+        config=agent_config,
+        env=env,
+        fabric=fabric,
+        root_dir=Path(checkpoint_path).resolve().parent,
+    )
+    agent.setup()
+    agent.load(str(Path(checkpoint_path).resolve()), load_env=False)
+
+    # --- Optional video capture setup ---
+    frames_dir = None
+    video_path = None
+    if video_output:
+        video_path = Path(video_output)
+        video_path.parent.mkdir(parents=True, exist_ok=True)
+        frames_dir = video_path.with_suffix("") / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- Inference loop ---
+    agent.eval()
+    done_indices = None
+    try:
+        for step in range(max_steps):
+            obs, _ = env.reset(done_indices)
+            obs = agent.add_agent_info_to_obs(obs)
+            obs_td = agent.obs_dict_to_tensordict(obs)
+            model_outs = agent.model(obs_td)
+            actions = model_outs.get("mean_action", model_outs.get("action"))
+            obs, rewards, dones, terminated, extras = env.step(actions)
+            if frames_dir is not None:
+                frame_path = frame_path_for_step(frames_dir, step)
+                simulator._write_viewport_to_file(str(frame_path))
+            done_indices = dones.nonzero(as_tuple=False).squeeze(-1)
+
+        # Compile video if frames were captured
+        if frames_dir is not None and video_path is not None:
+            frame_paths = sorted(frames_dir.glob("*.png"))
+            if frame_paths:
+                compile_video(frame_paths, video_path, fps=30)
+                print(f"Video saved to {video_path}")
+    finally:
+        simulation_app.close()
+
+
 def main():
     args = parse_args()
     simulation_app, world, articulation, tracker_assets = build_scene(
@@ -100,8 +245,16 @@ def main():
     if not args.motion_file:
         run_standalone(world, simulation_app, args.headless)
     else:
-        # ProtoMotions mode — Task 7
-        raise NotImplementedError("ProtoMotions mode not yet implemented. Pass --motion-file to use it.")
+        run_protomotions(
+            world=world,
+            articulation=articulation,
+            simulation_app=simulation_app,
+            tracker_assets=tracker_assets,
+            motion_file=args.motion_file,
+            checkpoint_path=args.checkpoint,
+            headless=args.headless,
+            video_output=args.video_output if args.video_output else None,
+        )
 
 
 if __name__ == "__main__":

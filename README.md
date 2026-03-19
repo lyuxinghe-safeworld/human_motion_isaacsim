@@ -1,6 +1,6 @@
-# `hymotion_isaacsim`
+# `protomotions_isaacsim`
 
-This repo contains the Isaac Sim inference path for running ProtoMotions tracking against the same `.motion` files produced by `/home/lyuxinghe/code/hymotion_isaaclab`.
+This repo contains the Isaac Sim inference path for running ProtoMotions tracking against the same `.motion` files produced by [ProtoMotions](https://github.com/NVlabs/ProtoMotions).
 
 Start with `env/README.md` for:
 

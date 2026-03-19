@@ -37,7 +37,7 @@ def parse_args():
 def build_scene(checkpoint_path: str, headless: bool):
     """Create the Isaac Sim world with ground plane, humanoid, and static objects.
 
-    Returns (simulation_app, world, articulation, tracker_assets).
+    Returns (simulation_app, world, articulation, body_rigid_view, tracker_assets).
     """
     from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
     from hymotion_isaacsim.checkpoint import load_tracker_assets
@@ -53,6 +53,7 @@ def build_scene(checkpoint_path: str, headless: bool):
     from omni.isaac.core.utils.stage import add_reference_to_stage
     from omni.isaac.core.articulations import Articulation
     from omni.isaac.core.objects import GroundPlane
+    from omni.isaac.core.prims import RigidPrimView
     from hymotion_isaacsim.custom_scene import populate_scene
 
     # Physics dt from checkpoint config
@@ -74,9 +75,19 @@ def build_scene(checkpoint_path: str, headless: bool):
     # Static objects
     populate_scene(world)
 
+    # Per-body rigid view — needed for per-body transforms/velocities.
+    # The USD hierarchy puts bodies under /World/Humanoid/bodies/<name>.
+    # Must be added to scene BEFORE world.reset() so it gets initialized.
+    body_names = tracker_assets.robot_config.kinematic_info.body_names
+    body_prim_paths = [f"/World/Humanoid/bodies/{name}" for name in body_names]
+    body_rigid_view = RigidPrimView(
+        prim_paths_expr=body_prim_paths, name="humanoid_bodies"
+    )
+    world.scene.add(body_rigid_view)
+
     world.reset()
 
-    return simulation_app, world, articulation, tracker_assets
+    return simulation_app, world, articulation, body_rigid_view, tracker_assets
 
 
 def run_standalone(world, simulation_app, headless: bool):
@@ -94,6 +105,7 @@ def run_standalone(world, simulation_app, headless: bool):
 def run_protomotions(
     world,
     articulation,
+    body_rigid_view,
     simulation_app,
     tracker_assets,
     motion_file: str,
@@ -179,6 +191,7 @@ def run_protomotions(
         device=fabric.device,
         terrain=terrain,
     )
+    simulator._body_rigid_view = body_rigid_view
     # NOTE: Do NOT call simulator._initialize_with_markers() here.
     # The Env.__init__ calls it internally with visualization markers.
 
@@ -242,7 +255,7 @@ def run_protomotions(
 
 def main():
     args = parse_args()
-    simulation_app, world, articulation, tracker_assets = build_scene(
+    simulation_app, world, articulation, body_rigid_view, tracker_assets = build_scene(
         args.checkpoint, args.headless,
     )
 
@@ -252,6 +265,7 @@ def main():
         run_protomotions(
             world=world,
             articulation=articulation,
+            body_rigid_view=body_rigid_view,
             simulation_app=simulation_app,
             tracker_assets=tracker_assets,
             motion_file=args.motion_file,

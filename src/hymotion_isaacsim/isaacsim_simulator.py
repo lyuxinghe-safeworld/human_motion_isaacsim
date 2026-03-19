@@ -45,6 +45,7 @@ class IsaacSimSimulator(Simulator):
         self._world = world
         self._articulation = articulation
         self._simulation_app = simulation_app
+        self._body_rigid_view = None  # Set externally after construction
         self._contact_sensors: Dict = {}
         self._contact_body_prim_paths: list = []
 
@@ -217,21 +218,32 @@ class IsaacSimSimulator(Simulator):
     def _get_simulator_bodies_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        """Read per-body transforms and velocities from the articulation view."""
-        positions, quats = self._view.get_world_poses()
+        """Read per-body transforms and velocities via the ``RigidPrimView``.
+
+        The ``_body_rigid_view`` must be set externally before this method is
+        called (typically in the entry script after creating the world).  It
+        wraps all body prim paths (e.g. ``/World/Humanoid/bodies/Pelvis``)
+        and returns ``(num_bodies, 3)`` positions, ``(num_bodies, 4)``
+        quaternions, and ``(num_bodies, 6)`` velocities.
+        """
+        if self._body_rigid_view is None:
+            raise RuntimeError(
+                "_body_rigid_view not set — call set_body_rigid_view() before using the simulator"
+            )
+
+        positions, quats = self._body_rigid_view.get_world_poses()
         positions = self._ensure_tensor(positions)
         quats = self._ensure_tensor(quats)
 
-        # Ensure 3-D: (num_envs, num_bodies, dim)
-        if positions.dim() == 2:
-            positions = positions.unsqueeze(0)
-            quats = quats.unsqueeze(0)
+        vels = self._ensure_tensor(self._body_rigid_view.get_velocities())
+        lin_vels = vels[:, :3]
+        ang_vels = vels[:, 3:]
 
-        lin_vels = self._ensure_tensor(self._view.get_linear_velocities())
-        ang_vels = self._ensure_tensor(self._view.get_angular_velocities())
-        if lin_vels.dim() == 2:
-            lin_vels = lin_vels.unsqueeze(0)
-            ang_vels = ang_vels.unsqueeze(0)
+        # RigidPrimView returns (num_bodies, dim) — add batch dim (1, num_bodies, dim)
+        positions = positions.unsqueeze(0)
+        quats = quats.unsqueeze(0)
+        lin_vels = lin_vels.unsqueeze(0)
+        ang_vels = ang_vels.unsqueeze(0)
 
         if env_ids is not None:
             positions = positions[env_ids]

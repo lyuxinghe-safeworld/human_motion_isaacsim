@@ -450,14 +450,28 @@ class IsaacSimSimulator(Simulator):
                 xf.AddRotateXYZOp().Set(Gf.Vec3f(-45.0, 45.0, 0.0))
 
             # Create camera using replicator (handles transform correctly)
-            cam = rep.create.camera(
+            self._rep_cam = rep.create.camera(
                 position=(2.5, -2.0, 1.5),
                 look_at=(0.0, -0.2, 0.5),
             )
-            rp = rep.create.render_product(cam, (1280, 720))
+            rp = rep.create.render_product(self._rep_cam, (1280, 720))
             self._rep_annotator = rep.AnnotatorRegistry.get_annotator('rgb')
             self._rep_annotator.attach([rp])
             self._rep_module = rep
+
+        # Move camera to follow the humanoid
+        root_pos = self._ensure_tensor(
+            self._articulation.get_world_pose()[0]
+        ).cpu().numpy()
+        cam_offset = [3.0, -2.0, 2.0]
+        cam_pos = [root_pos[0] + cam_offset[0], root_pos[1] + cam_offset[1], root_pos[2] + cam_offset[2]]
+        look_at = [float(root_pos[0]), float(root_pos[1]), float(root_pos[2]) + 0.5]
+        with self._rep_module.trigger.on_custom_event(event_name="move_cam"):
+            self._rep_cam.modify(
+                position=cam_pos,
+                look_at=look_at,
+            )
+        self._rep_module.utils.send_og_event(event_name="move_cam")
 
         self._rep_module.orchestrator.step()
         data = self._rep_annotator.get_data()

@@ -50,19 +50,19 @@ export PROTOMOTIONS_ROOT=/path/to/ProtoMotions
 
 ## Preferred render wrapper
 
-Use `scripts/run_custom_scene.sh` for normal motion renders. It exports the required Isaac Sim runtime variables for you, defaults to headless mode, and forwards into `scripts/run_custom_scene.py`.
+Use `scripts/run_scene.sh` for normal motion renders. It exports the required Isaac Sim runtime variables for you, defaults to headless mode, and forwards into `scripts/run_scene.py`.
 
 Headless by default:
 
 ```bash
-scripts/run_custom_scene.sh \
+scripts/run_scene.sh \
   --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion
 ```
 
 Monitor-backed on `DISPLAY=:1`:
 
 ```bash
-scripts/run_custom_scene.sh \
+scripts/run_scene.sh \
   --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion \
   --headless false \
   --display :1
@@ -118,7 +118,7 @@ Before running ProtoMotions, verify that Isaac Sim can see the TurboVNC monitor 
 ```bash
 DISPLAY=:1 \
 OMNI_KIT_ACCEPT_EULA=YES \
-env/.venv/bin/python scripts/test_isaacsim_monitor.py \
+env/.venv/bin/python scripts/smoke_monitor.py \
   --output output/monitor_probe.png
 ```
 
@@ -148,7 +148,7 @@ NCCL_IB_DISABLE=1 \
 NCCL_NET=Socket \
 MASTER_ADDR=127.0.0.1 \
 MASTER_PORT=29500 \
-env/.venv/bin/python scripts/smoke_run_motion.py \
+env/.venv/bin/python scripts/smoke_motion.py \
   --checkpoint /home/lyuxinghe/code/human_motion_isaacsim/third_party/ProtoMotions/data/pretrained_models/motion_tracker/smpl/last.ckpt \
   --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion \
   --video-output output/smoke_vnc.mp4
@@ -157,7 +157,7 @@ env/.venv/bin/python scripts/smoke_run_motion.py \
 Headless alternative:
 
 ```bash
-OMNI_KIT_ACCEPT_EULA=YES env/.venv/bin/python scripts/smoke_run_motion.py \
+OMNI_KIT_ACCEPT_EULA=YES env/.venv/bin/python scripts/smoke_motion.py \
   --checkpoint /home/lyuxinghe/code/human_motion_isaacsim/third_party/ProtoMotions/data/pretrained_models/motion_tracker/smpl/last.ckpt \
   --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion \
   --video-output output/smoke_headless.mp4 \
@@ -171,7 +171,7 @@ Expected outputs:
 
 ## Notes
 
-- `scripts/run_custom_scene.sh` is the preferred user-facing entrypoint; `scripts/run_custom_scene.py` remains the underlying Python runtime entrypoint.
+- `scripts/run_scene.sh` is the preferred user-facing entrypoint; `scripts/run_scene.py` remains the underlying Python runtime entrypoint.
 - During motion execution, the runner uses the same active-viewport capture call used by the ProtoMotions Isaac Lab path: `simulator._write_viewport_to_file(...)`. That keeps camera behavior aligned with `/home/lyuxinghe/code/hymotion_isaaclab`.
 - In monitor mode, the smoke runner uses the normal Isaac Sim GUI kit on `DISPLAY=:1`, which matches the `hymotion_isaaclab` monitor workflow.
 - The standalone smoke runner owns the stepping loop for the duration of the motion. The future stage-bound controller should reuse the same policy/capture pieces without taking over an externally managed world lifecycle.

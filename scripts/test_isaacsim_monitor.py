@@ -29,7 +29,7 @@ def main():
         for _ in range(max(args.warmup_frames, 0)):
             app_launcher.app.update()
 
-        from human_motion_isaacsim.recording import capture_active_viewport_to_file
+        from human_motion_isaacsim.viewport_capture import capture_active_viewport_to_file
 
         capture_active_viewport_to_file(output_path, simulation_app=app_launcher.app)
         print(f"monitor_probe={output_path}", flush=True)

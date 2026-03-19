@@ -3,7 +3,7 @@ __all__ = [
     "MotionRunResult",
     "ProtoMotionIsaacSimController",
     "load_motion_metadata",
-    "recording",
+    "viewport_capture",
 ]
 
 
@@ -24,8 +24,8 @@ def __getattr__(name: str):
         from human_motion_isaacsim.motion_file import load_motion_metadata
 
         return load_motion_metadata
-    if name == "recording":
+    if name == "viewport_capture":
         import importlib
 
-        return importlib.import_module("human_motion_isaacsim.recording")
+        return importlib.import_module("human_motion_isaacsim.viewport_capture")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

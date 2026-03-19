@@ -176,7 +176,7 @@ class ProtoMotionsRuntime:
         import_simulator_before_torch(self.simulator_name)
 
         from human_motion_isaacsim.motion_file import load_motion_metadata
-        from human_motion_isaacsim.recording import compile_video, frame_path_for_step
+        from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
         from human_motion_isaacsim.result import MotionRunResult
 
         motion_metadata = load_motion_metadata(motion_file)

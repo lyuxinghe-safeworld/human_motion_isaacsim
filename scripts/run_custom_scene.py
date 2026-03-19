@@ -202,7 +202,7 @@ def run_protomotions(
 
     from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
     from human_motion_isaacsim.motion_file import load_motion_metadata
-    from human_motion_isaacsim.recording import compile_video, frame_path_for_step
+    from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
 
     # --- Fabric (single device, no DDP) ---
     fabric = Fabric(

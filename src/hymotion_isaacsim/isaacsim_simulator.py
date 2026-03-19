@@ -411,19 +411,32 @@ class IsaacSimSimulator(Simulator):
     def _write_viewport_to_file(self, file_name: str) -> None:
         """Capture the current viewport render to a file.
 
-        Lazily acquires the active viewport API on first call, then delegates
-        to ``self._capture_viewport`` (which may be overridden in tests) or to
-        ``omni.kit.viewport.utility.capture_viewport_to_file`` in real usage.
-        """
-        if not hasattr(self, '_viewport_api') or self._viewport_api is None:
-            from omni.kit.viewport.utility import get_active_viewport
-            self._viewport_api = get_active_viewport()
+        Uses Replicator's ``rgb`` annotator attached to a render product for
+        reliable frame capture that works in both windowed and headless mode.
 
+        On first call, lazily creates a render product and annotator.  If a
+        ``_capture_viewport`` callable is set (for test mocking), it is used
+        instead.
+        """
         if hasattr(self, '_capture_viewport') and callable(self._capture_viewport):
-            self._capture_viewport(self._viewport_api, file_name)
-        else:
-            import omni.kit.viewport.utility as vp_utils
-            vp_utils.capture_viewport_to_file(self._viewport_api, file_name)
+            vp = getattr(self, '_viewport_api', None)
+            self._capture_viewport(vp, file_name)
+            return
+
+        # Lazy init: create replicator render product + rgb annotator
+        if not hasattr(self, '_rep_annotator') or self._rep_annotator is None:
+            import omni.replicator.core as rep
+            rp = rep.create.render_product('/OmniverseKit_Persp', (1280, 720))
+            self._rep_annotator = rep.AnnotatorRegistry.get_annotator('rgb')
+            self._rep_annotator.attach([rp])
+            self._rep_module = rep
+
+        self._rep_module.orchestrator.step()
+        data = self._rep_annotator.get_data()
+        if data is not None and data.size > 0:
+            from PIL import Image
+            img = Image.fromarray(data[:, :, :3])
+            img.save(file_name)
 
     def _init_camera(self) -> None:
         """Initialize camera view. No-op for now; can be extended later."""

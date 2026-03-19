@@ -25,7 +25,7 @@ from protomotions.components.scene_lib import SceneLib
 from protomotions.components.terrains.terrain import Terrain
 
 
-class IsaacSimSimulator(Simulator):
+class SimulatorAdapter(Simulator):
     """Adapter that wraps an Isaac Sim world and articulation behind ProtoMotions' Simulator API.
 
     The constructor stores the Isaac Sim objects and then delegates to the base class

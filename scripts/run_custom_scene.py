@@ -200,7 +200,7 @@ def run_protomotions(
     from protomotions.components.motion_lib import MotionLib
     from protomotions.utils.component_builder import build_terrain_from_config
 
-    from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+    from human_motion_isaacsim.simulator_adapter import SimulatorAdapter
     from human_motion_isaacsim.motion_file import load_motion_metadata
     from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
 
@@ -245,8 +245,8 @@ def run_protomotions(
     scene_lib = SceneLib.empty(num_envs=1, device=str(fabric.device), terrain=terrain)
     motion_lib = MotionLib(motion_lib_config, device=str(fabric.device))
 
-    # --- Create our IsaacSimSimulator adapter ---
-    simulator = IsaacSimSimulator(
+    # --- Create our SimulatorAdapter ---
+    simulator = SimulatorAdapter(
         world=world,
         articulation=articulation,
         simulation_app=simulation_app,

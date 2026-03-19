@@ -120,6 +120,7 @@ def run_protomotions(
     from protomotions.utils.inference_utils import apply_backward_compatibility_fixes
     from protomotions.components.scene_lib import SceneLib
     from protomotions.components.motion_lib import MotionLib
+    from protomotions.utils.component_builder import build_terrain_from_config
 
     from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
     from hymotion_isaacsim.motion_file import load_motion_metadata
@@ -142,6 +143,7 @@ def run_protomotions(
     # --- Deep-copy configs from checkpoint ---
     robot_config = deepcopy(tracker_assets.robot_config)
     simulator_config = deepcopy(tracker_assets.simulator_config)
+    terrain_config = deepcopy(tracker_assets.terrain_config)
     motion_lib_config = deepcopy(tracker_assets.motion_lib_config)
     env_config = deepcopy(tracker_assets.env_config)
     agent_config = deepcopy(tracker_assets.agent_config)
@@ -161,8 +163,9 @@ def run_protomotions(
     if hasattr(env_config, "max_episode_length"):
         env_config.max_episode_length = max(env_config.max_episode_length, max_steps + 100)
 
-    # --- Create empty SceneLib and MotionLib from motion file ---
-    scene_lib = SceneLib.empty(num_envs=1, device=str(fabric.device))
+    # --- Create terrain, empty SceneLib, and MotionLib from motion file ---
+    terrain = build_terrain_from_config(terrain_config, num_envs=1, device=fabric.device)
+    scene_lib = SceneLib.empty(num_envs=1, device=str(fabric.device), terrain=terrain)
     motion_lib = MotionLib(motion_lib_config, device=str(fabric.device))
 
     # --- Create our IsaacSimSimulator adapter ---
@@ -174,7 +177,7 @@ def run_protomotions(
         robot_config=robot_config,
         scene_lib=scene_lib,
         device=fabric.device,
-        terrain=None,
+        terrain=terrain,
     )
     simulator._initialize_with_markers({})
 
@@ -184,7 +187,7 @@ def run_protomotions(
         config=env_config,
         robot_config=robot_config,
         device=fabric.device,
-        terrain=None,
+        terrain=terrain,
         scene_lib=scene_lib,
         motion_lib=motion_lib,
         simulator=simulator,

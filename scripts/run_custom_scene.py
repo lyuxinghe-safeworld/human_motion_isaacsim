@@ -228,21 +228,29 @@ def run_protomotions(
         frames_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Inference loop ---
+    print(f"[run] max_steps={max_steps}, frames_dir={frames_dir}, video_path={video_path}", flush=True)
     agent.eval()
     done_indices = None
     try:
         for step in range(max_steps):
-            obs, _ = env.reset(done_indices)
-            obs = agent.add_agent_info_to_obs(obs)
-            obs_td = agent.obs_dict_to_tensordict(obs)
-            model_outs = agent.model(obs_td)
-            actions = model_outs.get("mean_action", model_outs.get("action"))
-            obs, rewards, dones, terminated, extras = env.step(actions)
-            if frames_dir is not None:
-                frame_path = frame_path_for_step(frames_dir, step)
-                simulator._write_viewport_to_file(str(frame_path))
-            done_indices = dones.nonzero(as_tuple=False).squeeze(-1)
+            try:
+                obs, _ = env.reset(done_indices)
+                obs = agent.add_agent_info_to_obs(obs)
+                obs_td = agent.obs_dict_to_tensordict(obs)
+                model_outs = agent.model(obs_td)
+                actions = model_outs.get("mean_action", model_outs.get("action"))
+                obs, rewards, dones, terminated, extras = env.step(actions)
+                if frames_dir is not None:
+                    frame_path = frame_path_for_step(frames_dir, step)
+                    simulator._write_viewport_to_file(str(frame_path))
+                done_indices = dones.nonzero(as_tuple=False).squeeze(-1)
+            except Exception as _step_err:
+                import sys as _sys, traceback as _tb
+                _sys.stderr.write(f"[step {step}] error: {_step_err}\n")
+                _tb.print_exc(file=_sys.stderr)
+                raise
 
+        print(f"[done] completed {max_steps} steps", flush=True)
         # Compile video if frames were captured
         if frames_dir is not None and video_path is not None:
             frame_paths = sorted(frames_dir.glob("*.png"))

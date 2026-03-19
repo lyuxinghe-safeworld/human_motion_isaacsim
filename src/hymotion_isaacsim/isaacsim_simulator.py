@@ -127,24 +127,26 @@ class IsaacSimSimulator(Simulator):
         """Write root pose, root velocity, joint positions/velocities to the articulation.
 
         ``SingleArticulation`` uses *singular* setters (``set_world_pose``,
-        ``set_linear_velocity``, etc.) that expect unbatched tensors, so we
-        squeeze the batch dimension before calling them.
+        ``set_linear_velocity``, etc.) that expect unbatched **numpy** arrays,
+        so we squeeze the batch dimension and convert to numpy before calling.
         """
+        def _to_np(t):
+            return t.detach().cpu().numpy()
+
         # Root pose — squeeze batch dim for single articulation
-        root_pos = new_states.root_pos.squeeze(0)
-        root_rot = new_states.root_rot.squeeze(0)
-        self._articulation.set_world_pose(position=root_pos, orientation=root_rot)
+        self._articulation.set_world_pose(
+            position=_to_np(new_states.root_pos.squeeze(0)),
+            orientation=_to_np(new_states.root_rot.squeeze(0)),
+        )
 
         # Root velocity
-        root_vel = new_states.root_vel.squeeze(0)
-        root_ang_vel = new_states.root_ang_vel.squeeze(0)
-        self._articulation.set_linear_velocity(root_vel)
-        self._articulation.set_angular_velocity(root_ang_vel)
+        self._articulation.set_linear_velocity(_to_np(new_states.root_vel.squeeze(0)))
+        self._articulation.set_angular_velocity(_to_np(new_states.root_ang_vel.squeeze(0)))
 
-        # Joint state — these accept batched or unbatched
-        self._articulation.set_joint_positions(new_states.dof_pos.squeeze(0))
-        self._articulation.set_joint_velocities(new_states.dof_vel.squeeze(0))
-        self._articulation.set_joint_position_targets(new_states.dof_pos.squeeze(0))
+        # Joint state
+        self._articulation.set_joint_positions(_to_np(new_states.dof_pos.squeeze(0)))
+        self._articulation.set_joint_velocities(_to_np(new_states.dof_vel.squeeze(0)))
+        self._articulation.set_joint_position_targets(_to_np(new_states.dof_pos.squeeze(0)))
 
     def _apply_root_velocity_impulse(
         self,
@@ -153,8 +155,12 @@ class IsaacSimSimulator(Simulator):
         env_ids: torch.Tensor,
     ) -> None:
         """Set root velocities on the articulation for the given environments."""
-        self._articulation.set_linear_velocity(linear_velocity.squeeze(0))
-        self._articulation.set_angular_velocity(angular_velocity.squeeze(0))
+        self._articulation.set_linear_velocity(
+            linear_velocity.squeeze(0).detach().cpu().numpy()
+        )
+        self._articulation.set_angular_velocity(
+            angular_velocity.squeeze(0).detach().cpu().numpy()
+        )
 
     # ------------------------------------------------------------------
     # Group 4: State Getters
@@ -393,16 +399,20 @@ class IsaacSimSimulator(Simulator):
     def _apply_simulator_pd_targets(self, pd_targets: torch.Tensor) -> None:
         """Apply PD position targets to the articulation.
 
-        Squeeze batch dim for SingleArticulation which expects 1-D input.
+        SingleArticulation expects 1-D numpy arrays.
         """
-        self._articulation.set_joint_position_targets(pd_targets.squeeze(0))
+        self._articulation.set_joint_position_targets(
+            pd_targets.squeeze(0).detach().cpu().numpy()
+        )
 
     def _apply_simulator_torques(self, torques: torch.Tensor) -> None:
         """Apply raw torques to the articulation.
 
-        Squeeze batch dim for SingleArticulation which expects 1-D input.
+        SingleArticulation expects 1-D numpy arrays.
         """
-        self._articulation.set_joint_efforts(torques.squeeze(0))
+        self._articulation.set_joint_efforts(
+            torques.squeeze(0).detach().cpu().numpy()
+        )
 
     # ------------------------------------------------------------------
     # Group 6: Rendering & Visualization

@@ -68,6 +68,29 @@ Outputs:
 - in headless video runs, the red reference markers are rendered into the saved frames so you can compare the tracked body against the input motion
 - pass `--reference-markers false` when you want a clean render without the red target spheres
 
+## Known issues
+
+### Humanoid teleports on episode reset
+
+ProtoMotions calls `env.reset()` whenever an episode boundary is reached (the `dones` tensor has nonzero entries). The reset writes a new root pose via `SimulatorAdapter._set_simulator_env_state()`, which teleports the humanoid to a different world-space position and orientation. In `scripts/run_scene.py` the custom-scene path compensates by calling `_align_scene_to_humanoid_root()` after every reset to reposition the ground plane and static objects, but the standalone smoke path in `MotionRunner.run_standalone_motion()` does not — if a reset fires mid-clip, the humanoid will appear to jump to a new location while the camera follows but the scene stays behind.
+
+Practically this means:
+
+- Short motions that finish within one episode are unaffected.
+- Longer motions or motions with early termination will show a visible snap when the humanoid is respawned.
+- The custom-scene script handles this; the standalone smoke runner does not.
+
+### Non-headless mode (`--headless false`) produces degraded tracking
+
+Running with `--headless false` (monitor-backed / GUI mode) results in the humanoid failing to accurately track the input motion. The root cause is a render-timing difference in the two capture pipelines:
+
+- **Headless:** `_capture_headless_follow_camera_rgba()` calls `self._world.render()` once after physics is done, then reads the frame from a dedicated Isaac Sim Camera sensor. No extra state is advanced.
+- **Non-headless:** `_physics_step()` calls `self._world.render()` at the end of each step (inside `env.step()`), and then `_write_viewport_to_file()` calls `self._rep_module.orchestrator.step()` to capture from Replicator's annotator pipeline. The Replicator orchestrator step can advance internal state that desyncs the articulation readback from the policy's expectations.
+
+Additionally, `_physics_step()` injects an extra `self._world.render()` call only when `headless=False` (line 131 of `simulator_adapter.py`), which does not happen in headless mode. This extra render call changes the timing of physics readback relative to the policy step.
+
+Use `--headless true` (the default) for reliable motion tracking and video output.
+
 Key runtime code:
 
 - `src/human_motion_isaacsim/motion_runner.py`
@@ -81,3 +104,7 @@ The intended root-level layout is:
 - `tests/` for unit and guard coverage
 - `env/` for the `uv` bootstrap and pinned dependency setup
 - `plans/` and `specs/` for the design and implementation artifacts
+
+
+## TODOs:
+create a git workflow that will deploy this repo to gcp python package and test it end-to-end (python registry)

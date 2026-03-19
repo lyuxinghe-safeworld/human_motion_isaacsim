@@ -38,14 +38,14 @@ Preferred headless render:
 
 ```bash
 scripts/run_custom_scene.sh \
-  --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion
+  --motion-file assets/a_person_is_reaching_out_his_left_hand_and_walking.motion
 ```
 
 Monitor-backed run on `DISPLAY=:1`:
 
 ```bash
 scripts/run_custom_scene.sh \
-  --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion \
+  --motion-file assets/a_person_is_reaching_out_his_left_hand_and_walking.motion \
   --headless false \
   --display :1
 ```
@@ -54,7 +54,7 @@ Override the checkpoint, output path, or marker rendering:
 
 ```bash
 scripts/run_custom_scene.sh \
-  --motion-file /home/lyuxinghe/code/hymotion_isaaclab/output/a_person_is_reaching_out_his_left_hand_and_walking_000.motion \
+  --motion-file assets/a_person_is_reaching_out_his_left_hand_and_walking.motion \
   --checkpoint /home/lyuxinghe/code/human_motion_isaacsim/third_party/ProtoMotions/data/pretrained_models/motion_tracker/smpl/last.ckpt \
   --video-output /home/lyuxinghe/code/human_motion_isaacsim/output/custom_scene.mp4 \
   --reference-markers false

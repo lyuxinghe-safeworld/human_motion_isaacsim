@@ -434,9 +434,16 @@ class IsaacSimSimulator(Simulator):
             self._capture_viewport(vp, file_name)
             return
 
-        # Lazy init: create replicator render product + rgb annotator
+        # Lazy init: create camera, render product, and rgb annotator
         if not hasattr(self, '_rep_annotator') or self._rep_annotator is None:
             import omni.replicator.core as rep
+            from omni.isaac.core.utils.viewports import set_camera_view
+            import numpy as np
+            # Point default camera at the humanoid (origin area)
+            set_camera_view(
+                eye=np.array([3.0, 3.0, 2.0]),
+                target=np.array([0.0, 0.0, 0.5]),
+            )
             rp = rep.create.render_product('/OmniverseKit_Persp', (1280, 720))
             self._rep_annotator = rep.AnnotatorRegistry.get_annotator('rgb')
             self._rep_annotator.attach([rp])

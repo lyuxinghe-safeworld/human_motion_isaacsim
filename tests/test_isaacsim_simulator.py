@@ -191,7 +191,7 @@ class TestStateSetterAndControl:
         adapter._articulation = art
         targets = torch.zeros((1, 69))
         adapter._apply_simulator_pd_targets(targets)
-        art.set_joint_position_targets.assert_called_once()
+        art._articulation_view.set_joint_position_targets.assert_called_once()
 
     def test_apply_simulator_torques_calls_articulation(self):
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
@@ -200,7 +200,7 @@ class TestStateSetterAndControl:
         adapter._articulation = art
         torques = torch.zeros((1, 69))
         adapter._apply_simulator_torques(torques)
-        art.set_joint_efforts.assert_called_once()
+        art._articulation_view.set_joint_efforts.assert_called_once()
 
     def test_apply_root_velocity_impulse_sets_velocity(self):
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator

@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/run_custom_scene.sh --motion-file PATH [options]
+Usage: scripts/run_scene.sh --motion-file PATH [options]
 
 Options:
   --motion-file PATH          Path to the .motion file to render. Required.
@@ -122,7 +122,7 @@ export MASTER_PORT="29500"
 
 cmd=(
   "$python_bin"
-  "$repo_root/scripts/run_custom_scene.py"
+  "$repo_root/scripts/run_scene.py"
   --checkpoint "$checkpoint"
   --motion-file "$motion_file"
   --video-output "$video_output"

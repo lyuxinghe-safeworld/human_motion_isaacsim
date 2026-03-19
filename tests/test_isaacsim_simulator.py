@@ -108,7 +108,7 @@ class TestStateGetters:
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         num_dof = 69
         art = _make_fake_articulation()
-        art.get_measured_joint_forces.return_value = torch.zeros((1, num_dof))
+        art.get_measured_joint_efforts.return_value = torch.zeros((1, num_dof))
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
         adapter.device = "cpu"

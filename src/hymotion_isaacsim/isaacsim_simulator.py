@@ -434,17 +434,42 @@ class IsaacSimSimulator(Simulator):
             self._capture_viewport(vp, file_name)
             return
 
-        # Lazy init: create camera, render product, and rgb annotator
+        # Lazy init: create camera prim, light, render product, and rgb annotator
         if not hasattr(self, '_rep_annotator') or self._rep_annotator is None:
             import omni.replicator.core as rep
-            from omni.isaac.core.utils.viewports import set_camera_view
-            import numpy as np
-            # Point default camera at the humanoid (origin area)
-            set_camera_view(
-                eye=np.array([3.0, 3.0, 2.0]),
-                target=np.array([0.0, 0.0, 0.5]),
+            from pxr import UsdGeom, UsdLux, Gf
+
+            stage = self._world.stage
+
+            # Create a camera prim looking at the humanoid
+            cam_path = "/World/CaptureCamera"
+            cam_prim = stage.DefinePrim(cam_path, "Camera")
+            cam = UsdGeom.Camera(cam_prim)
+            cam.GetClippingRangeAttr().Set(Gf.Vec2f(0.1, 1000.0))
+            xform = UsdGeom.Xformable(cam_prim)
+            xform.ClearXformOpOrder()
+            xform.AddTranslateOp().Set(Gf.Vec3d(3.0, 3.0, 2.0))
+            # Use a transform matrix to point at origin
+            import omni.kit.commands
+            omni.kit.commands.execute(
+                "FramePrimsCommand",
+                prim_to_frame="/World/Humanoid",
+                prims_to_move=[cam_path],
+                time_code=0,
+                aspect_ratio=1280.0 / 720.0,
+                zoom=0.5,
             )
-            rp = rep.create.render_product('/OmniverseKit_Persp', (1280, 720))
+
+            # Add a distant light so the scene is visible
+            light_path = "/World/DistantLight"
+            if not stage.GetPrimAtPath(light_path).IsValid():
+                light_prim = stage.DefinePrim(light_path, "DistantLight")
+                light = UsdLux.DistantLight(light_prim)
+                light.GetIntensityAttr().Set(3000.0)
+                xf = UsdGeom.Xformable(light_prim)
+                xf.AddRotateXYZOp().Set(Gf.Vec3f(-45.0, 45.0, 0.0))
+
+            rp = rep.create.render_product(cam_path, (1280, 720))
             self._rep_annotator = rep.AnnotatorRegistry.get_annotator('rgb')
             self._rep_annotator.attach([rp])
             self._rep_module = rep

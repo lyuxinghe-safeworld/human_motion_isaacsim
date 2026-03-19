@@ -293,6 +293,7 @@ class TestContactSensors:
         adapter.num_envs = 1
         adapter._num_bodies = num_bodies
         adapter._contact_sensors = {}
-        buf = adapter._get_simulator_bodies_contact_buf()
-        assert buf.shape == (1, num_bodies, 3)
-        assert (buf == 0).all()
+        result = adapter._get_simulator_bodies_contact_buf()
+        assert result.rigid_body_contact_forces.shape == (1, num_bodies, 3)
+        assert (result.rigid_body_contact_forces == 0).all()
+        assert result.state_conversion == StateConversion.SIMULATOR

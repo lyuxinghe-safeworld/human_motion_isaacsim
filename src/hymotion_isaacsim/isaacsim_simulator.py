@@ -318,8 +318,8 @@ class IsaacSimSimulator(Simulator):
 
     def _get_simulator_bodies_contact_buf(
         self, env_ids: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        """Return contact forces as a ``(num_envs, num_bodies, 3)`` tensor.
+    ) -> RobotState:
+        """Return contact forces as a ``RobotState`` with ``rigid_body_contact_forces``.
 
         If no contact sensors have been configured (``_contact_sensors`` is
         empty), a zero tensor is returned.  This is the correct behaviour for
@@ -331,7 +331,10 @@ class IsaacSimSimulator(Simulator):
         n = self.num_envs if env_ids is None else len(env_ids)
 
         if not self._contact_sensors:
-            return torch.zeros(n, self._num_bodies, 3, device=self.device)
+            return RobotState(
+                rigid_body_contact_forces=torch.zeros(n, self._num_bodies, 3, device=self.device),
+                state_conversion=StateConversion.SIMULATOR,
+            )
 
         forces = []
         for path in self._contact_body_prim_paths:
@@ -350,7 +353,10 @@ class IsaacSimSimulator(Simulator):
         if env_ids is not None:
             contact_buf = contact_buf[env_ids]
 
-        return contact_buf.to(self.device)
+        return RobotState(
+            rigid_body_contact_forces=contact_buf.to(self.device),
+            state_conversion=StateConversion.SIMULATOR,
+        )
 
     def _get_simulator_object_root_state(
         self, env_ids: Optional[torch.Tensor] = None

@@ -13,10 +13,15 @@ from protomotions.simulator.base_simulator.simulator_state import (
 def _make_fake_articulation(body_names=None, dof_names=None):
     from hymotion_isaacsim.binding import EXPECTED_SMPL_BODY_NAMES, EXPECTED_SMPL_JOINT_NAMES
     art = MagicMock()
-    art.body_names = list(body_names or EXPECTED_SMPL_BODY_NAMES)
-    art.dof_names = list(dof_names or EXPECTED_SMPL_JOINT_NAMES)
-    art.num_bodies = len(art.body_names)
-    art.num_dof = len(art.dof_names)
+    body = list(body_names or EXPECTED_SMPL_BODY_NAMES)
+    dof = list(dof_names or EXPECTED_SMPL_JOINT_NAMES)
+    art.body_names = body
+    art.dof_names = dof
+    art.num_bodies = len(body)
+    art.num_dof = len(dof)
+    # The adapter accesses art._articulation_view for body_names and batched APIs
+    art._articulation_view.body_names = body
+    art._articulation_view.dof_names = dof
     return art
 
 
@@ -51,11 +56,12 @@ class TestStateGetters:
     def test_get_simulator_root_state_returns_root_only_state(self):
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
-        art.get_world_poses.return_value = (
-            torch.tensor([[1.0, 2.0, 3.0]]),
-            torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+        # SingleArticulation.get_world_pose() returns unbatched (3,) and (4,)
+        art.get_world_pose.return_value = (
+            torch.tensor([1.0, 2.0, 3.0]),
+            torch.tensor([1.0, 0.0, 0.0, 0.0]),
         )
-        art.get_velocities.return_value = torch.tensor([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]])
+        art.get_world_velocity.return_value = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
         adapter.device = "cpu"
@@ -70,18 +76,16 @@ class TestStateGetters:
     def test_get_simulator_root_state_with_env_ids(self):
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
-        art.get_world_poses.return_value = (
-            torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
-            torch.tensor([[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]),
+        # Return batched (already has batch dim)
+        art.get_world_pose.return_value = (
+            torch.tensor([1.0, 2.0, 3.0]),
+            torch.tensor([1.0, 0.0, 0.0, 0.0]),
         )
-        art.get_velocities.return_value = torch.tensor([
-            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
-            [0.7, 0.8, 0.9, 1.0, 1.1, 1.2],
-        ])
+        art.get_world_velocity.return_value = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
         adapter.device = "cpu"
-        adapter.num_envs = 2
+        adapter.num_envs = 1
         state = adapter._get_simulator_root_state(env_ids=torch.tensor([0]))
         assert state.root_pos.shape == (1, 3)
 
@@ -120,7 +124,8 @@ class TestStateGetters:
         limits = torch.zeros((1, num_dof, 2))
         limits[..., 0] = -3.14
         limits[..., 1] = 3.14
-        art.get_dof_limits.return_value = limits
+        # DOF limits are read from the view, not the single articulation
+        art._articulation_view.get_dof_limits.return_value = limits
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
         adapter.device = "cpu"
@@ -172,10 +177,11 @@ class TestStateSetterAndControl:
             state_conversion=StateConversion.SIMULATOR,
         )
         adapter._set_simulator_env_state(new_states, env_ids=torch.tensor([0]))
-        art.set_world_poses.assert_called_once()
+        art.set_world_pose.assert_called_once()
+        art.set_linear_velocity.assert_called_once()
+        art.set_angular_velocity.assert_called_once()
         art.set_joint_positions.assert_called_once()
         art.set_joint_velocities.assert_called_once()
-        art.set_velocities.assert_called_once()
         art.set_joint_position_targets.assert_called_once()
 
     def test_apply_simulator_pd_targets_calls_articulation(self):
@@ -205,10 +211,8 @@ class TestStateSetterAndControl:
         ang_vel = torch.tensor([[0.0, 0.0, 1.0]])
         env_ids = torch.tensor([0])
         adapter._apply_root_velocity_impulse(lin_vel, ang_vel, env_ids)
-        art.set_velocities.assert_called_once()
-        # Verify the concatenated tensor shape
-        call_args = art.set_velocities.call_args[0][0]
-        assert call_args.shape == (1, 6)
+        art.set_linear_velocity.assert_called_once()
+        art.set_angular_velocity.assert_called_once()
 
     def test_physics_step_calls_world_step_decimation_times(self):
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator

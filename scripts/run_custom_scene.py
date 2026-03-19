@@ -179,7 +179,8 @@ def run_protomotions(
         device=fabric.device,
         terrain=terrain,
     )
-    simulator._initialize_with_markers({})
+    # NOTE: Do NOT call simulator._initialize_with_markers() here.
+    # The Env.__init__ calls it internally with visualization markers.
 
     # --- Create Env ---
     EnvClass = get_class(env_config._target_)

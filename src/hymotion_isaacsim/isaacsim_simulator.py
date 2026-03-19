@@ -210,8 +210,9 @@ class IsaacSimSimulator(Simulator):
     def _ensure_tensor(self, data, dtype=torch.float32) -> torch.Tensor:
         """Convert numpy arrays to torch tensors if needed."""
         if isinstance(data, torch.Tensor):
-            return data
-        return torch.tensor(data, dtype=dtype, device=self.device)
+            return data.to(device=self.device, dtype=dtype)
+        # numpy → CPU tensor → move to device
+        return torch.as_tensor(data, dtype=dtype).to(self.device)
 
     def _get_simulator_bodies_state(
         self, env_ids: Optional[torch.Tensor] = None

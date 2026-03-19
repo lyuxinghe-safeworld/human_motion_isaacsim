@@ -168,14 +168,22 @@ class IsaacSimSimulator(Simulator):
         ``(1, ...)`` to match the ``(num_envs, ...)`` convention.
         """
         pos, quat = self._articulation.get_world_pose()
-        vel = self._articulation.get_world_velocity()
+        pos = self._ensure_tensor(pos)
+        quat = self._ensure_tensor(quat)
 
         # SingleArticulation returns (3,) and (4,) — add batch dim
         root_pos = pos.unsqueeze(0) if pos.dim() == 1 else pos
         root_rot = quat.unsqueeze(0) if quat.dim() == 1 else quat
-        # get_world_velocity may not exist; fall back to get_velocities on view
+
+        # Try get_world_velocity first; fall back to view's get_velocities
+        try:
+            vel = self._articulation.get_world_velocity()
+            vel = self._ensure_tensor(vel)
+        except (AttributeError, TypeError):
+            vel = None
+
         if vel is None:
-            vels = self._view.get_velocities()
+            vels = self._ensure_tensor(self._view.get_velocities())
             root_vel = vels[:, :3]
             root_ang_vel = vels[:, 3:]
         elif vel.dim() == 1:
@@ -199,26 +207,27 @@ class IsaacSimSimulator(Simulator):
             state_conversion=StateConversion.SIMULATOR,
         )
 
+    def _ensure_tensor(self, data, dtype=torch.float32) -> torch.Tensor:
+        """Convert numpy arrays to torch tensors if needed."""
+        if isinstance(data, torch.Tensor):
+            return data
+        return torch.tensor(data, dtype=dtype, device=self.device)
+
     def _get_simulator_bodies_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        """Read per-body transforms and velocities from the articulation view.
-
-        The view's ``get_world_poses()`` returns ``(positions [N,num_bodies,3],
-        quats [N,num_bodies,4])``. ``get_velocities()`` returns
-        ``[N, num_bodies, 6]`` (lin xyz + ang xyz). If the view only returns
-        root-level data we fall back to ``get_linear_velocities`` /
-        ``get_angular_velocities`` which are explicitly per-body.
-        """
+        """Read per-body transforms and velocities from the articulation view."""
         positions, quats = self._view.get_world_poses()
-        # Ensure batch dim
+        positions = self._ensure_tensor(positions)
+        quats = self._ensure_tensor(quats)
+
+        # Ensure 3-D: (num_envs, num_bodies, dim)
         if positions.dim() == 2:
-            # (num_bodies, 3) -> (1, num_bodies, 3)
             positions = positions.unsqueeze(0)
             quats = quats.unsqueeze(0)
 
-        lin_vels = self._view.get_linear_velocities()
-        ang_vels = self._view.get_angular_velocities()
+        lin_vels = self._ensure_tensor(self._view.get_linear_velocities())
+        ang_vels = self._ensure_tensor(self._view.get_angular_velocities())
         if lin_vels.dim() == 2:
             lin_vels = lin_vels.unsqueeze(0)
             ang_vels = ang_vels.unsqueeze(0)
@@ -241,8 +250,8 @@ class IsaacSimSimulator(Simulator):
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
         """Read joint positions and velocities from the articulation."""
-        dof_pos = self._articulation.get_joint_positions()
-        dof_vel = self._articulation.get_joint_velocities()
+        dof_pos = self._ensure_tensor(self._articulation.get_joint_positions())
+        dof_vel = self._ensure_tensor(self._articulation.get_joint_velocities())
 
         # SingleArticulation may return 1-D tensors; ensure batch dim
         if dof_pos.dim() == 1:
@@ -263,7 +272,7 @@ class IsaacSimSimulator(Simulator):
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
         """Read measured joint forces from the articulation."""
-        dof_forces = self._articulation.get_measured_joint_forces()
+        dof_forces = self._ensure_tensor(self._articulation.get_measured_joint_forces())
 
         if dof_forces.dim() == 1:
             dof_forces = dof_forces.unsqueeze(0)

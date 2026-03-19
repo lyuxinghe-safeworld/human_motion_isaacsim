@@ -441,15 +441,13 @@ class IsaacSimSimulator(Simulator):
 
             stage = self._world.stage
 
-            # Add a distant light so the scene is visible
-            light_path = "/World/DistantLight"
+            # Add a dome light for uniform illumination regardless of position
+            light_path = "/World/DomeLight"
             if not stage.GetPrimAtPath(light_path).IsValid():
-                light_prim = stage.DefinePrim(light_path, "DistantLight")
-                UsdLux.DistantLight(light_prim).GetIntensityAttr().Set(3000.0)
-                xf = UsdGeom.Xformable(light_prim)
-                xf.AddRotateXYZOp().Set(Gf.Vec3f(-45.0, 45.0, 0.0))
+                light_prim = stage.DefinePrim(light_path, "DomeLight")
+                UsdLux.DomeLight(light_prim).GetIntensityAttr().Set(1000.0)
 
-            # Create camera using replicator (handles transform correctly)
+            # Create camera via USD prim so we can reposition with set_camera_view
             # Create camera via USD so we can move it with set_camera_view
             from pxr import UsdGeom, Gf
             self._cam_prim_path = "/World/FollowCamera"

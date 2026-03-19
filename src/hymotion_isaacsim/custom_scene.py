@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 SCENE_ROOT_PRIM_PATH = "/World/custom_scene"
+GROUND_PLANE_PRIM_PATH = "/World/GroundPlane"
 
 SCENE_OBJECTS = [
     {
@@ -78,6 +79,16 @@ def set_scene_origin(world: Any, origin: tuple[float, float, float]) -> None:
     scene_origin = np.asarray(origin, dtype=np.float64)
     if scene_origin.shape != (3,):
         raise ValueError(f"Expected a 3D scene origin, got shape {scene_origin.shape}")
+
+    ground_plane = stage.GetPrimAtPath(GROUND_PLANE_PRIM_PATH)
+    if not ground_plane.IsValid():
+        raise RuntimeError(f"Ground plane prim does not exist: {GROUND_PLANE_PRIM_PATH}")
+    ground_plane_translate_attr = ground_plane.GetAttribute("xformOp:translate")
+    if not ground_plane_translate_attr.IsValid():
+        raise RuntimeError(
+            f"Ground plane is missing xformOp:translate: {GROUND_PLANE_PRIM_PATH}"
+        )
+    ground_plane_translate_attr.Set(Gf.Vec3d(*scene_origin.tolist()))
 
     for obj in SCENE_OBJECTS:
         prim = stage.GetPrimAtPath(obj["prim_path"])

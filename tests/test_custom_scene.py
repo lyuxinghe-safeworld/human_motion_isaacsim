@@ -90,7 +90,11 @@ def test_scene_objects_are_static():
 
 
 def test_set_scene_origin_offsets_all_object_translations():
-    from hymotion_isaacsim.custom_scene import SCENE_OBJECTS, set_scene_origin
+    from hymotion_isaacsim.custom_scene import (
+        GROUND_PLANE_PRIM_PATH,
+        SCENE_OBJECTS,
+        set_scene_origin,
+    )
 
     class _FakePrim:
         def __init__(self):
@@ -117,6 +121,7 @@ def test_set_scene_origin_offsets_all_object_translations():
     class _FakeStage:
         def __init__(self):
             self._prims = {obj["prim_path"]: _FakePrim() for obj in SCENE_OBJECTS}
+            self._prims[GROUND_PLANE_PRIM_PATH] = _FakePrim()
 
         def GetPrimAtPath(self, prim_path):
             return self._prims[prim_path]
@@ -125,6 +130,9 @@ def test_set_scene_origin_offsets_all_object_translations():
     world = types.SimpleNamespace(stage=stage)
 
     set_scene_origin(world, (10.0, 20.0, 0.0))
+
+    ground_plane = stage.GetPrimAtPath(GROUND_PLANE_PRIM_PATH)
+    assert ground_plane.translate == pytest.approx((10.0, 20.0, 0.0))
 
     for obj in SCENE_OBJECTS:
         prim = stage.GetPrimAtPath(obj["prim_path"])

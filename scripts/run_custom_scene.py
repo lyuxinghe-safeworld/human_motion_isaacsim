@@ -351,6 +351,12 @@ def main():
             video_output=args.video_output if args.video_output else None,
             reference_markers=args.reference_markers,
         )
+        
+        # INSTALL:
+        # install with pip
+        # FUNCTIONS:
+        # .init
+        # .control
 
 
 if __name__ == "__main__":

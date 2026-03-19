@@ -451,8 +451,8 @@ class IsaacSimSimulator(Simulator):
 
             # Create camera using replicator (handles transform correctly)
             cam = rep.create.camera(
-                position=(5.0, 5.0, 3.0),
-                look_at=(0.0, 0.0, 0.8),
+                position=(4.0, -3.0, 2.0),
+                look_at=(0.0, 0.0, 0.5),
             )
             rp = rep.create.render_product(cam, (1280, 720))
             self._rep_annotator = rep.AnnotatorRegistry.get_annotator('rgb')

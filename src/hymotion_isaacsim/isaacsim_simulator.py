@@ -284,8 +284,13 @@ class IsaacSimSimulator(Simulator):
     def _get_simulator_dof_forces(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        """Read measured joint forces from the articulation."""
-        dof_forces = self._ensure_tensor(self._articulation.get_measured_joint_forces())
+        """Read measured joint efforts (per-DOF forces) from the articulation.
+
+        Note: ``get_measured_joint_forces()`` returns (num_joints, 6) reaction
+        forces, not per-DOF torques. ``get_measured_joint_efforts()`` returns
+        the per-DOF effort values matching the ``(num_dof,)`` shape.
+        """
+        dof_forces = self._ensure_tensor(self._articulation.get_measured_joint_efforts())
 
         if dof_forces.dim() == 1:
             dof_forces = dof_forces.unsqueeze(0)

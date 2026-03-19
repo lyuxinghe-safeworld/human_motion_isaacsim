@@ -8,7 +8,11 @@ import numpy as np
 import torch
 
 from protomotions.simulator.base_simulator.simulator import Simulator
-from protomotions.simulator.base_simulator.config import SimBodyOrdering, SimulatorConfig
+from protomotions.simulator.base_simulator.config import (
+    ProjectileConfig,
+    SimBodyOrdering,
+    SimulatorConfig,
+)
 from protomotions.simulator.base_simulator.simulator_state import (
     RobotState,
     RootOnlyState,
@@ -169,6 +173,64 @@ class IsaacSimSimulator(Simulator):
         self._articulation.set_angular_velocity(
             angular_velocity.squeeze(0).detach().cpu().numpy()
         )
+
+    def _create_projectiles(self, config: ProjectileConfig) -> None:
+        """Keep an in-memory projectile state cache for base-class bookkeeping.
+
+        This adapter does not spawn separate projectile rigid bodies in Isaac Sim,
+        but the ProtoMotions base class now expects a projectile pool to exist.
+        Maintaining a cached state keeps recording and reset flows consistent
+        without introducing unsupported simulator objects here.
+        """
+        self._projectile_positions = torch.zeros(
+            self.num_envs,
+            config.num_projectiles,
+            3,
+            device=self.device,
+        )
+        self._projectile_rotations_xyzw = torch.zeros(
+            self.num_envs,
+            config.num_projectiles,
+            4,
+            device=self.device,
+        )
+        self._projectile_rotations_xyzw[..., 3] = 1.0
+
+    def _set_projectile_root_states(
+        self,
+        proj_indices: torch.Tensor,
+        positions: torch.Tensor,
+        rotations_xyzw: torch.Tensor,
+        velocities: torch.Tensor,
+        ang_velocities: torch.Tensor,
+        env_ids: torch.Tensor,
+    ) -> None:
+        """Update the cached projectile state for the requested env/projectile pairs."""
+        del velocities, ang_velocities
+        if not hasattr(self, "_projectile_positions") or not hasattr(
+            self, "_projectile_rotations_xyzw"
+        ):
+            num_projectiles = int(
+                getattr(getattr(self, "_proj_config", None), "num_projectiles", 0)
+            )
+            self._create_projectiles(ProjectileConfig(num_projectiles=num_projectiles))
+
+        self._projectile_positions[env_ids, proj_indices] = positions.to(self.device)
+        self._projectile_rotations_xyzw[env_ids, proj_indices] = rotations_xyzw.to(
+            self.device
+        )
+
+    def _get_projectile_positions_rotations(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return cached projectile poses in ProtoMotions' common xyzw format."""
+        if not hasattr(self, "_projectile_positions") or not hasattr(
+            self, "_projectile_rotations_xyzw"
+        ):
+            num_projectiles = int(
+                getattr(getattr(self, "_proj_config", None), "num_projectiles", 0)
+            )
+            self._create_projectiles(ProjectileConfig(num_projectiles=num_projectiles))
+
+        return self._projectile_positions, self._projectile_rotations_xyzw
 
     # ------------------------------------------------------------------
     # Group 4: State Getters
@@ -638,7 +700,7 @@ class IsaacSimSimulator(Simulator):
         """Update the interactive camera before delegating to ProtoMotions rendering."""
         if not self.headless:
             if not hasattr(self, "_perspective_view"):
-                from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
+                from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
 
                 ensure_protomotions_importable()
                 from protomotions.simulator.isaaclab.utils.perspective_viewer import (

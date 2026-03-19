@@ -7,7 +7,7 @@ from typing import Any
 
 import torch
 
-from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable, resolve_protomotions_root
+from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable, resolve_protomotions_root
 
 
 @dataclass(slots=True)

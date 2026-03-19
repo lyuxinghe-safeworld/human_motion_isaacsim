@@ -5,7 +5,7 @@ import pytest
 
 
 def test_capture_active_viewport_to_file_flushes_async_capture(tmp_path, monkeypatch):
-    import hymotion_isaacsim.recording as recording
+    import human_motion_isaacsim.recording as recording
 
     output_path = tmp_path / "frame.png"
     calls = []
@@ -77,7 +77,7 @@ def test_capture_active_viewport_to_file_flushes_async_capture(tmp_path, monkeyp
 
 
 def test_capture_active_viewport_to_file_requires_simulation_app(tmp_path):
-    from hymotion_isaacsim.recording import capture_active_viewport_to_file
+    from human_motion_isaacsim.recording import capture_active_viewport_to_file
 
     with pytest.raises(ValueError, match="simulation_app"):
         capture_active_viewport_to_file(Path(tmp_path / "frame.png"), simulation_app=None)

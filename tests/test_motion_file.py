@@ -5,7 +5,7 @@ import torch
 
 
 def test_load_motion_metadata_reads_fps_and_frame_count(tmp_path):
-    from hymotion_isaacsim import load_motion_metadata
+    from human_motion_isaacsim import load_motion_metadata
 
     motion_path = tmp_path / "example.motion"
     torch.save(
@@ -25,7 +25,7 @@ def test_load_motion_metadata_reads_fps_and_frame_count(tmp_path):
 
 
 def test_load_motion_metadata_rejects_non_motion_suffix(tmp_path):
-    from hymotion_isaacsim import load_motion_metadata
+    from human_motion_isaacsim import load_motion_metadata
 
     bad_path = tmp_path / "example.pt"
     torch.save({"fps": 30, "rigid_body_pos": torch.zeros((1, 1, 3))}, bad_path)

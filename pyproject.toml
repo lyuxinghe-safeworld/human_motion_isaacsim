@@ -3,7 +3,7 @@ requires = ["setuptools>=69.5.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hymotion-isaacsim"
+name = "human-motion-isaacsim"
 version = "0.1.0"
 requires-python = ">=3.11,<3.12"
 
@@ -12,3 +12,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src", "third_party/ProtoMotions"]
+testpaths = ["tests"]

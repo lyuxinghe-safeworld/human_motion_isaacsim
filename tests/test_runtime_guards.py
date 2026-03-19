@@ -12,7 +12,7 @@ class _FakeArticulation:
 
 
 def test_validate_humanoid_path_rejects_missing_prim():
-    from hymotion_isaacsim.binding import bind_fixed_humanoid, StageBindingError
+    from human_motion_isaacsim.binding import bind_fixed_humanoid, StageBindingError
 
     def lookup(_prim_path):
         return None
@@ -22,7 +22,7 @@ def test_validate_humanoid_path_rejects_missing_prim():
 
 
 def test_validate_humanoid_binding_rejects_incompatible_body_layout():
-    from hymotion_isaacsim.binding import bind_fixed_humanoid, StageBindingError
+    from human_motion_isaacsim.binding import bind_fixed_humanoid, StageBindingError
 
     articulation = _FakeArticulation(
         body_names=["Pelvis", "WrongBody"],
@@ -37,7 +37,7 @@ def test_validate_humanoid_binding_rejects_incompatible_body_layout():
 
 
 def test_load_tracker_checkpoint_requires_resolved_configs(tmp_path):
-    from hymotion_isaacsim.checkpoint import load_tracker_assets
+    from human_motion_isaacsim.checkpoint import load_tracker_assets
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -47,7 +47,7 @@ def test_load_tracker_checkpoint_requires_resolved_configs(tmp_path):
 
 
 def test_load_tracker_checkpoint_returns_expected_targets(tmp_path):
-    from hymotion_isaacsim.checkpoint import load_tracker_assets
+    from human_motion_isaacsim.checkpoint import load_tracker_assets
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -74,7 +74,7 @@ def test_load_tracker_checkpoint_returns_expected_targets(tmp_path):
 
 
 def test_load_tracker_checkpoint_bootstraps_protomotions_before_torch_load(tmp_path, monkeypatch):
-    import hymotion_isaacsim.checkpoint as checkpoint_module
+    import human_motion_isaacsim.checkpoint as checkpoint_module
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -108,7 +108,7 @@ def test_load_tracker_checkpoint_bootstraps_protomotions_before_torch_load(tmp_p
 
 
 def test_controller_initialization_binds_humanoid_and_checkpoint(tmp_path):
-    from hymotion_isaacsim.runtime import ProtoMotionIsaacSimController
+    from human_motion_isaacsim.runtime import ProtoMotionIsaacSimController
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -129,7 +129,7 @@ def test_controller_initialization_binds_humanoid_and_checkpoint(tmp_path):
 
 
 def test_controller_rejects_overlapping_run_requests(tmp_path):
-    from hymotion_isaacsim.runtime import ProtoMotionIsaacSimController
+    from human_motion_isaacsim.runtime import ProtoMotionIsaacSimController
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -148,7 +148,7 @@ def test_controller_rejects_overlapping_run_requests(tmp_path):
 
 
 def test_build_runtime_reuses_motion_tracker_agent_config():
-    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 
     assets = SimpleNamespace(
         env_config=SimpleNamespace(_target_="env.target"),
@@ -162,8 +162,8 @@ def test_build_runtime_reuses_motion_tracker_agent_config():
 
 
 def test_runtime_plans_steps_from_motion_metadata():
-    from hymotion_isaacsim.motion_file import MotionMetadata
-    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.motion_file import MotionMetadata
+    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 
     assets = SimpleNamespace(
         env_config=SimpleNamespace(_target_="env.target"),
@@ -176,8 +176,8 @@ def test_runtime_plans_steps_from_motion_metadata():
 
 
 def test_runtime_plans_steps_from_env_step_rate():
-    from hymotion_isaacsim.motion_file import MotionMetadata
-    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.motion_file import MotionMetadata
+    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 
     assets = SimpleNamespace(
         env_config=SimpleNamespace(_target_="env.target"),
@@ -191,7 +191,7 @@ def test_runtime_plans_steps_from_env_step_rate():
 
 
 def test_runtime_extends_episode_length_for_full_motion(tmp_path, monkeypatch):
-    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 
     assets = SimpleNamespace(
         robot_config=SimpleNamespace(asset=SimpleNamespace(asset_root="/tmp/assets")),
@@ -248,14 +248,14 @@ def test_runtime_extends_episode_length_for_full_motion(tmp_path, monkeypatch):
 
         return _FakeEnv
 
-    monkeypatch.setattr("hymotion_isaacsim.protomotions_runtime.ensure_protomotions_importable", lambda: tmp_path)
+    monkeypatch.setattr("human_motion_isaacsim.protomotions_runtime.ensure_protomotions_importable", lambda: tmp_path)
     monkeypatch.setattr("lightning.fabric.Fabric", _FakeFabric)
     monkeypatch.setattr("protomotions.utils.component_builder.build_all_components", fake_build_all_components)
     monkeypatch.setattr("protomotions.utils.fabric_config.FabricConfig", _FakeFabricConfig)
     monkeypatch.setattr("protomotions.utils.hydra_replacement.get_class", fake_get_class)
     monkeypatch.setattr("protomotions.utils.inference_utils.apply_backward_compatibility_fixes", lambda *args: None)
     monkeypatch.setattr("protomotions.utils.simulator_imports.import_simulator_before_torch", lambda _name: _FakeAppLauncher)
-    monkeypatch.setattr("protomotions.envs.managers.base_manager.TORCH_COMPILE_AVAILABLE", True)
+    monkeypatch.setattr("protomotions.envs.component_manager.TORCH_COMPILE_AVAILABLE", True)
     monkeypatch.setattr(
         "protomotions.simulator.base_simulator.utils.convert_friction_for_simulator",
         lambda terrain_config, simulator_config: (terrain_config, simulator_config),
@@ -286,13 +286,13 @@ def test_runtime_extends_episode_length_for_full_motion(tmp_path, monkeypatch):
     assert env_config_seen["config"] is not assets.env_config
     assert fabric_config_seen["strategy"] == "auto"
     assert app_launcher_seen["flags"]["enable_cameras"] is True
-    from protomotions.envs.managers import base_manager as base_manager_module
+    from protomotions.envs import component_manager as base_manager_module
 
     assert base_manager_module.TORCH_COMPILE_AVAILABLE is False
 
 
 def test_compile_video_uses_hymotion_codec_settings(tmp_path, monkeypatch):
-    from hymotion_isaacsim import recording
+    from human_motion_isaacsim import recording
 
     calls = {}
 
@@ -322,14 +322,14 @@ def test_compile_video_uses_hymotion_codec_settings(tmp_path, monkeypatch):
 
 
 def test_frame_path_sequence_is_zero_padded(tmp_path):
-    from hymotion_isaacsim.recording import frame_path_for_step
+    from human_motion_isaacsim.recording import frame_path_for_step
 
     assert frame_path_for_step(tmp_path, 7).name == "000007.png"
 
 
 def test_run_standalone_motion_uses_protomotions_viewport_capture(tmp_path, monkeypatch):
-    from hymotion_isaacsim.motion_file import MotionMetadata
-    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.motion_file import MotionMetadata
+    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 
     assets = SimpleNamespace(
         env_config=SimpleNamespace(_target_="env.target"),
@@ -369,7 +369,7 @@ def test_run_standalone_motion_uses_protomotions_viewport_capture(tmp_path, monk
             return None
 
     monkeypatch.setattr(
-        "hymotion_isaacsim.motion_file.load_motion_metadata",
+        "human_motion_isaacsim.motion_file.load_motion_metadata",
         lambda _path: MotionMetadata(path=Path("walk.motion"), fps=30, num_frames=2),
     )
     monkeypatch.setattr(
@@ -393,7 +393,7 @@ def test_run_standalone_motion_uses_protomotions_viewport_capture(tmp_path, monk
         compile_calls["video_path"] = Path(video_path)
         compile_calls["fps"] = fps
 
-    monkeypatch.setattr("hymotion_isaacsim.recording.compile_video", fake_compile)
+    monkeypatch.setattr("human_motion_isaacsim.recording.compile_video", fake_compile)
 
     result = runtime.run_standalone_motion(
         checkpoint_path=tmp_path / "last.ckpt",
@@ -413,8 +413,8 @@ def test_run_standalone_motion_uses_protomotions_viewport_capture(tmp_path, monk
 
 
 def test_run_motion_returns_success_result_for_valid_motion(tmp_path):
-    from hymotion_isaacsim.runtime import ProtoMotionIsaacSimController
-    from hymotion_isaacsim.result import MotionRunResult
+    from human_motion_isaacsim.runtime import ProtoMotionIsaacSimController
+    from human_motion_isaacsim.result import MotionRunResult
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -445,7 +445,7 @@ def test_run_motion_returns_success_result_for_valid_motion(tmp_path):
 
 
 def test_run_motion_restores_rest_pose_on_runtime_error(tmp_path):
-    from hymotion_isaacsim.runtime import ProtoMotionIsaacSimController
+    from human_motion_isaacsim.runtime import ProtoMotionIsaacSimController
 
     checkpoint = tmp_path / "last.ckpt"
     checkpoint.write_bytes(b"checkpoint")
@@ -474,3 +474,21 @@ def test_run_motion_restores_rest_pose_on_runtime_error(tmp_path):
         controller.run_motion(motion_file)
 
     assert restored["called"] is True
+
+
+def test_resolve_protomotions_root_prefers_repo_local_submodule(tmp_path, monkeypatch):
+    import human_motion_isaacsim.protomotions_path as protomotions_path
+
+    repo_root = tmp_path / "human_motion_isaacsim"
+    local_root = repo_root / "third_party" / "ProtoMotions"
+    module_file = repo_root / "src" / "human_motion_isaacsim" / "protomotions_path.py"
+    (local_root / "protomotions").mkdir(parents=True)
+    (local_root / "protomotions" / "__init__.py").write_text("", encoding="utf-8")
+
+    monkeypatch.delenv("PROTOMOTIONS_ROOT", raising=False)
+    monkeypatch.delenv("PROTO_MOTIONS_ROOT", raising=False)
+    monkeypatch.setattr(protomotions_path, "__file__", str(module_file))
+    monkeypatch.setattr(protomotions_path, "find_spec", lambda _name: None)
+    monkeypatch.setattr(protomotions_path.Path, "home", lambda: tmp_path / "home")
+
+    assert protomotions_path.resolve_protomotions_root() == local_root.resolve()

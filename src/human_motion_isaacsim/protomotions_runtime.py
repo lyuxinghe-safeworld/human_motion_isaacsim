@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
+from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
 
 
 @dataclass(slots=True)
@@ -19,7 +19,7 @@ class ProtoMotionsRuntime:
         *,
         simulator_name: str = "isaaclab",
     ) -> "ProtoMotionsRuntime":
-        from hymotion_isaacsim.checkpoint import load_tracker_assets
+        from human_motion_isaacsim.checkpoint import load_tracker_assets
 
         return cls(
             tracker_assets=load_tracker_assets(checkpoint_path),
@@ -57,8 +57,8 @@ class ProtoMotionsRuntime:
 
         ensure_protomotions_importable()
         from lightning.fabric import Fabric
+        from protomotions.envs import component_manager as component_manager_module
         from protomotions.utils.component_builder import build_all_components
-        from protomotions.envs.managers import base_manager as base_manager_module
         from protomotions.utils.fabric_config import FabricConfig
         from protomotions.utils.hydra_replacement import get_class
         from protomotions.utils.inference_utils import apply_backward_compatibility_fixes
@@ -86,7 +86,7 @@ class ProtoMotionsRuntime:
         # NOTE(v1): manager-level torch.compile adds a long first-run warmup and
         # can stall this function-triggered controller path. Disable it here so
         # motion execution starts predictably from the first request.
-        base_manager_module.TORCH_COMPILE_AVAILABLE = False
+        component_manager_module.TORCH_COMPILE_AVAILABLE = False
 
         # NOTE(v1): this controller runs one blocking inference stream, so we
         # keep Fabric in single-device mode instead of DDP. In this pip-based
@@ -175,9 +175,9 @@ class ProtoMotionsRuntime:
 
         import_simulator_before_torch(self.simulator_name)
 
-        from hymotion_isaacsim.motion_file import load_motion_metadata
-        from hymotion_isaacsim.recording import compile_video, frame_path_for_step
-        from hymotion_isaacsim.result import MotionRunResult
+        from human_motion_isaacsim.motion_file import load_motion_metadata
+        from human_motion_isaacsim.recording import compile_video, frame_path_for_step
+        from human_motion_isaacsim.result import MotionRunResult
 
         motion_metadata = load_motion_metadata(motion_file)
         max_steps = self.plan_num_steps(motion_metadata)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
+from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
 
 
 def parse_args():
@@ -29,7 +29,7 @@ def main():
     # Isaac Lab / Isaac Sim must be imported before torch.
     import_simulator_before_torch("isaaclab")
 
-    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 
     runtime = ProtoMotionsRuntime.from_checkpoint_path(args.checkpoint)
     result = runtime.run_standalone_motion(

@@ -42,7 +42,7 @@ def parse_args():
 
 def _align_scene_to_humanoid_root(world, simulator) -> None:
     """Move the authored scene so its local origin stays near the humanoid spawn."""
-    from hymotion_isaacsim.custom_scene import set_scene_origin
+    from human_motion_isaacsim.custom_scene import set_scene_origin
 
     root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
     set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
@@ -104,8 +104,8 @@ def build_scene(checkpoint_path: str, headless: bool):
 
     Returns (simulation_app, world, articulation, body_rigid_view, tracker_assets).
     """
-    from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
-    from hymotion_isaacsim.checkpoint import load_tracker_assets
+    from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
+    from human_motion_isaacsim.checkpoint import load_tracker_assets
 
     ensure_protomotions_importable()
     tracker_assets = load_tracker_assets(checkpoint_path)
@@ -119,7 +119,7 @@ def build_scene(checkpoint_path: str, headless: bool):
     from omni.isaac.core.articulations import Articulation
     from omni.isaac.core.objects import GroundPlane
     from omni.isaac.core.prims import RigidPrimView
-    from hymotion_isaacsim.custom_scene import populate_scene
+    from human_motion_isaacsim.custom_scene import populate_scene
 
     # Physics dt from checkpoint config
     fps = getattr(tracker_assets.simulator_config.sim, "fps", 60)
@@ -183,14 +183,14 @@ def run_protomotions(
     from copy import deepcopy
     from dataclasses import asdict
 
-    from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
+    from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
 
     ensure_protomotions_importable()
 
     # Disable torch.compile warmup (same rationale as protomotions_runtime.py)
-    from protomotions.envs.managers import base_manager as base_manager_module
+    from protomotions.envs import component_manager as component_manager_module
 
-    base_manager_module.TORCH_COMPILE_AVAILABLE = False
+    component_manager_module.TORCH_COMPILE_AVAILABLE = False
 
     from lightning.fabric import Fabric
     from protomotions.utils.fabric_config import FabricConfig
@@ -200,9 +200,9 @@ def run_protomotions(
     from protomotions.components.motion_lib import MotionLib
     from protomotions.utils.component_builder import build_terrain_from_config
 
-    from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
-    from hymotion_isaacsim.motion_file import load_motion_metadata
-    from hymotion_isaacsim.recording import compile_video, frame_path_for_step
+    from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+    from human_motion_isaacsim.motion_file import load_motion_metadata
+    from human_motion_isaacsim.recording import compile_video, frame_path_for_step
 
     # --- Fabric (single device, no DDP) ---
     fabric = Fabric(

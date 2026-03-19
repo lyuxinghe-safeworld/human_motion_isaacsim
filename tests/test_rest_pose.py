@@ -2,7 +2,7 @@ import torch
 
 
 def test_restore_rest_pose_preserves_root_translation():
-    from hymotion_isaacsim.rest_pose import capture_rest_pose_defaults, compose_rest_pose_state
+    from human_motion_isaacsim.rest_pose import capture_rest_pose_defaults, compose_rest_pose_state
 
     defaults = capture_rest_pose_defaults(
         root_orientation=torch.tensor([1.0, 0.0, 0.0, 0.0]),
@@ -19,7 +19,7 @@ def test_restore_rest_pose_preserves_root_translation():
 
 
 def test_restore_rest_pose_zeros_joint_and_root_velocities():
-    from hymotion_isaacsim.rest_pose import capture_rest_pose_defaults, compose_rest_pose_state
+    from human_motion_isaacsim.rest_pose import capture_rest_pose_defaults, compose_rest_pose_state
 
     defaults = capture_rest_pose_defaults(
         root_orientation=torch.tensor([1.0, 0.0, 0.0, 0.0]),

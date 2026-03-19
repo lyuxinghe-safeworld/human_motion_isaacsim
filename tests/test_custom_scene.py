@@ -58,7 +58,7 @@ _install_pxr_stubs()
 
 def test_populate_scene_adds_three_objects():
     """populate_scene should add box, cylinder, sphere to the world."""
-    from hymotion_isaacsim.custom_scene import SCENE_OBJECTS, populate_scene
+    from human_motion_isaacsim.custom_scene import SCENE_OBJECTS, populate_scene
 
     assert len(SCENE_OBJECTS) == 3
 
@@ -75,7 +75,7 @@ def test_populate_scene_adds_three_objects():
 
 
 def test_scene_objects_have_expected_prim_paths():
-    from hymotion_isaacsim.custom_scene import SCENE_OBJECTS
+    from human_motion_isaacsim.custom_scene import SCENE_OBJECTS
 
     paths = [obj["prim_path"] for obj in SCENE_OBJECTS]
     assert all(p.startswith("/World/custom_scene/") for p in paths)
@@ -83,14 +83,14 @@ def test_scene_objects_have_expected_prim_paths():
 
 def test_scene_objects_are_static():
     """All scene objects should have fixed_base=True (static)."""
-    from hymotion_isaacsim.custom_scene import SCENE_OBJECTS
+    from human_motion_isaacsim.custom_scene import SCENE_OBJECTS
 
     for obj in SCENE_OBJECTS:
         assert obj.get("fixed_base", False) is True, f"{obj['prim_path']} is not static"
 
 
 def test_set_scene_origin_offsets_all_object_translations():
-    from hymotion_isaacsim.custom_scene import (
+    from human_motion_isaacsim.custom_scene import (
         GROUND_PLANE_PRIM_PATH,
         SCENE_OBJECTS,
         set_scene_origin,

@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Any
 
-from hymotion_isaacsim.binding import bind_fixed_humanoid
-from hymotion_isaacsim.checkpoint import load_tracker_assets
-from hymotion_isaacsim.motion_file import load_motion_metadata
+from human_motion_isaacsim.binding import bind_fixed_humanoid
+from human_motion_isaacsim.checkpoint import load_tracker_assets
+from human_motion_isaacsim.motion_file import load_motion_metadata
 
 
 class ProtoMotionIsaacSimController:

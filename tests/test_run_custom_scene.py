@@ -46,7 +46,7 @@ def test_align_scene_to_humanoid_root_uses_root_xy(monkeypatch):
 
     set_scene_origin = MagicMock()
     monkeypatch.setattr(
-        "hymotion_isaacsim.custom_scene.set_scene_origin",
+        "human_motion_isaacsim.custom_scene.set_scene_origin",
         set_scene_origin,
     )
 

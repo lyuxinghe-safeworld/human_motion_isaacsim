@@ -15,7 +15,7 @@ from protomotions.simulator.base_simulator.config import MarkerState
 
 
 def _make_fake_articulation(body_names=None, dof_names=None):
-    from hymotion_isaacsim.binding import EXPECTED_SMPL_BODY_NAMES, EXPECTED_SMPL_JOINT_NAMES
+    from human_motion_isaacsim.binding import EXPECTED_SMPL_BODY_NAMES, EXPECTED_SMPL_JOINT_NAMES
     art = MagicMock()
     body = list(body_names or EXPECTED_SMPL_BODY_NAMES)
     dof = list(dof_names or EXPECTED_SMPL_JOINT_NAMES)
@@ -33,7 +33,7 @@ def _make_fake_articulation(body_names=None, dof_names=None):
 
 class TestIsaacSimSimulatorConstruction:
     def test_adapter_stores_world_and_articulation(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         world = MagicMock()
         sim_app = MagicMock()
@@ -46,7 +46,7 @@ class TestIsaacSimSimulatorConstruction:
         assert adapter._simulation_app is sim_app
 
     def test_get_sim_body_ordering_returns_articulation_names(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation(
             body_names=["Pelvis", "L_Hip", "R_Hip"],
             dof_names=["L_Hip_x", "L_Hip_y", "R_Hip_x"],
@@ -60,7 +60,7 @@ class TestIsaacSimSimulatorConstruction:
 
 class TestStateGetters:
     def test_get_simulator_root_state_returns_root_only_state(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         # SingleArticulation.get_world_pose() returns unbatched (3,) and (4,)
         art.get_world_pose.return_value = (
@@ -80,7 +80,7 @@ class TestStateGetters:
         assert state.state_conversion == StateConversion.SIMULATOR
 
     def test_get_simulator_root_state_with_env_ids(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         # Return batched (already has batch dim)
         art.get_world_pose.return_value = (
@@ -96,7 +96,7 @@ class TestStateGetters:
         assert state.root_pos.shape == (1, 3)
 
     def test_get_simulator_dof_state_returns_robot_state(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         num_dof = 69
         art = _make_fake_articulation()
         art.get_joint_positions.return_value = torch.zeros((1, num_dof))
@@ -111,7 +111,7 @@ class TestStateGetters:
         assert state.state_conversion == StateConversion.SIMULATOR
 
     def test_get_simulator_dof_forces_returns_robot_state(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         num_dof = 69
         art = _make_fake_articulation()
         art.get_measured_joint_efforts.return_value = torch.zeros((1, num_dof))
@@ -124,7 +124,7 @@ class TestStateGetters:
         assert state.state_conversion == StateConversion.SIMULATOR
 
     def test_get_simulator_bodies_state_reorders_common_body_view_into_sim_order(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
 
         common_body_names = ["Pelvis", "Head", "L_Hand"]
         sim_body_names = ["Head", "Pelvis", "L_Hand"]
@@ -188,7 +188,7 @@ class TestStateGetters:
         assert state.state_conversion == StateConversion.SIMULATOR
 
     def test_get_simulator_bodies_state_prefers_physics_view_link_data(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
 
         art = _make_fake_articulation(body_names=["Pelvis", "Head"])
         art._articulation_view.is_physics_handle_valid.return_value = True
@@ -233,7 +233,7 @@ class TestStateGetters:
         )
 
     def test_get_simulator_dof_limits_for_verification(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         num_dof = 69
         art = _make_fake_articulation()
         limits = torch.zeros((1, num_dof, 2))
@@ -251,7 +251,7 @@ class TestStateGetters:
         assert torch.allclose(upper, torch.tensor([3.14]).expand(num_dof))
 
     def test_get_simulator_object_root_state_returns_empty(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter.device = "cpu"
         adapter.num_envs = 1
@@ -263,8 +263,53 @@ class TestStateGetters:
         assert state.root_ang_vel.shape == (1, 0, 3)
         assert state.state_conversion == StateConversion.SIMULATOR
 
+    def test_projectile_methods_default_to_empty_noop(self):
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from protomotions.simulator.base_simulator.config import ProjectileConfig
+
+        adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
+        adapter.device = "cpu"
+        adapter.num_envs = 2
+        adapter._proj_config = ProjectileConfig(num_projectiles=3)
+
+        positions, rotations = adapter._get_projectile_positions_rotations()
+
+        assert positions.shape == (2, 3, 3)
+        assert rotations.shape == (2, 3, 4)
+        assert torch.count_nonzero(positions) == 0
+        assert torch.count_nonzero(rotations[..., :3]) == 0
+        assert torch.all(rotations[..., 3] == 1.0)
+
+        write_positions = torch.tensor(
+            [
+                [1.0, 2.0, 3.0],
+                [4.0, 5.0, 6.0],
+            ]
+        )
+        write_rotations = torch.tensor(
+            [
+                [0.0, 0.0, 0.0, 1.0],
+                [0.5, 0.5, 0.5, 0.5],
+            ]
+        )
+        adapter._create_projectiles(adapter._proj_config)
+        adapter._set_projectile_root_states(
+            proj_indices=torch.tensor([0, 2]),
+            positions=write_positions,
+            rotations_xyzw=write_rotations,
+            velocities=torch.zeros((2, 3)),
+            ang_velocities=torch.zeros((2, 3)),
+            env_ids=torch.tensor([0, 1]),
+        )
+
+        updated_positions, updated_rotations = adapter._get_projectile_positions_rotations()
+        assert torch.allclose(updated_positions[0, 0], write_positions[0])
+        assert torch.allclose(updated_positions[1, 2], write_positions[1])
+        assert torch.allclose(updated_rotations[0, 0], write_rotations[0])
+        assert torch.allclose(updated_rotations[1, 2], write_rotations[1])
+
     def test_get_simulator_object_contact_buf_returns_empty(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter.device = "cpu"
         adapter.num_envs = 1
@@ -276,7 +321,7 @@ class TestStateGetters:
 
 class TestStateSetterAndControl:
     def test_set_simulator_env_state_writes_to_articulation(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
@@ -299,7 +344,7 @@ class TestStateSetterAndControl:
         art.set_joint_velocities.assert_called_once()
 
     def test_apply_simulator_pd_targets_calls_articulation(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
@@ -308,7 +353,7 @@ class TestStateSetterAndControl:
         art._articulation_view.set_joint_position_targets.assert_called_once()
 
     def test_apply_simulator_torques_calls_articulation(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
@@ -317,7 +362,7 @@ class TestStateSetterAndControl:
         art._articulation_view.set_joint_efforts.assert_called_once()
 
     def test_apply_root_velocity_impulse_sets_velocity(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
@@ -329,7 +374,7 @@ class TestStateSetterAndControl:
         art.set_angular_velocity.assert_called_once()
 
     def test_physics_step_calls_world_step_decimation_times(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         world = MagicMock()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._world = world
@@ -345,7 +390,7 @@ class TestStateSetterAndControl:
         assert adapter._apply_control.call_count == 4
 
     def test_physics_step_renders_when_not_headless(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         world = MagicMock()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._world = world
@@ -361,7 +406,7 @@ class TestStateSetterAndControl:
         world.render.assert_called_once()
 
     def test_close_calls_simulation_app(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         sim_app = MagicMock()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._simulation_app = sim_app
@@ -371,7 +416,7 @@ class TestStateSetterAndControl:
         assert adapter._simulation_running is False
 
     def test_create_simulation_configures_builtin_pd_drives(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         art = _make_fake_articulation()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._articulation = art
@@ -405,7 +450,7 @@ class TestStateSetterAndControl:
         art._articulation_view.set_max_efforts.assert_called_once()
 
     def test_init_camera_positions_follow_view_behind_root(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._perspective_view = MagicMock()
         adapter._camera_target = {"env": 0, "element": 0}
@@ -422,7 +467,7 @@ class TestStateSetterAndControl:
         assert np.allclose(adapter._cam_prev_char_pos, np.array([1.0, 2.0, 3.0]))
 
     def test_configure_follow_camera_lens_sets_wide_angle_defaults(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
 
         clipping_attr = MagicMock()
         focal_attr = MagicMock()
@@ -450,7 +495,7 @@ class TestStateSetterAndControl:
 
 class TestViewportAndMarkers:
     def test_write_viewport_to_file_uses_viewport_api(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         # Pre-set a mock viewport API so the method doesn't try to import omni
         mock_vp = MagicMock()
@@ -461,7 +506,7 @@ class TestViewportAndMarkers:
         adapter._capture_viewport.assert_called_once_with(mock_vp, "/tmp/test_frame.png")
 
     def test_prepare_headless_capture_primes_camera_with_render_async(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
 
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter.headless = True
@@ -484,7 +529,7 @@ class TestViewportAndMarkers:
         assert adapter._headless_capture_ready is True
 
     def test_capture_headless_follow_camera_rgba_uses_render_only_path(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
 
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         adapter._world = MagicMock()
@@ -503,7 +548,7 @@ class TestViewportAndMarkers:
         assert result is rgba
 
     def test_update_simulator_markers_updates_marker_prims(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)
         marker_a = MagicMock()
         marker_b = MagicMock()
@@ -530,7 +575,7 @@ class TestViewportAndMarkers:
 
 class TestContactSensors:
     def test_get_simulator_bodies_contact_buf_returns_zeros_without_sensors(self):
-        from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator
+        from human_motion_isaacsim.isaacsim_simulator import IsaacSimSimulator
         num_bodies = 24
         art = _make_fake_articulation()
         adapter = IsaacSimSimulator.__new__(IsaacSimSimulator)

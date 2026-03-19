@@ -97,6 +97,9 @@ class IsaacSimSimulator(Simulator):
         The view's ``get_dof_limits()`` returns ``[N, num_dof, 2]``.
         """
         dof_limits = self._view.get_dof_limits()
+        # May return numpy array — convert to tensor first
+        if not isinstance(dof_limits, torch.Tensor):
+            dof_limits = torch.tensor(dof_limits, dtype=torch.float32)
         # Shape: [N, num_dof, 2] — take first env, split lower/upper
         lower = dof_limits[0, :, 0].to(self.device)
         upper = dof_limits[0, :, 1].to(self.device)

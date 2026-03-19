@@ -146,7 +146,6 @@ class IsaacSimSimulator(Simulator):
         # Joint state
         self._articulation.set_joint_positions(_to_np(new_states.dof_pos.squeeze(0)))
         self._articulation.set_joint_velocities(_to_np(new_states.dof_vel.squeeze(0)))
-        self._articulation.set_joint_position_targets(_to_np(new_states.dof_pos.squeeze(0)))
 
     def _apply_root_velocity_impulse(
         self,
@@ -399,19 +398,21 @@ class IsaacSimSimulator(Simulator):
     def _apply_simulator_pd_targets(self, pd_targets: torch.Tensor) -> None:
         """Apply PD position targets to the articulation.
 
-        SingleArticulation expects 1-D numpy arrays.
+        ``SingleArticulation`` does not have ``set_joint_position_targets``;
+        the batched ``ArticulationView`` does.  We use the view and pass a
+        2-D numpy array ``(1, num_dof)``.
         """
-        self._articulation.set_joint_position_targets(
-            pd_targets.squeeze(0).detach().cpu().numpy()
+        self._view.set_joint_position_targets(
+            pd_targets.detach().cpu().numpy()
         )
 
     def _apply_simulator_torques(self, torques: torch.Tensor) -> None:
         """Apply raw torques to the articulation.
 
-        SingleArticulation expects 1-D numpy arrays.
+        Use the batched view for consistency with PD targets.
         """
-        self._articulation.set_joint_efforts(
-            torques.squeeze(0).detach().cpu().numpy()
+        self._view.set_joint_efforts(
+            torques.detach().cpu().numpy()
         )
 
     # ------------------------------------------------------------------

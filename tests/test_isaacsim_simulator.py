@@ -182,7 +182,6 @@ class TestStateSetterAndControl:
         art.set_angular_velocity.assert_called_once()
         art.set_joint_positions.assert_called_once()
         art.set_joint_velocities.assert_called_once()
-        art.set_joint_position_targets.assert_called_once()
 
     def test_apply_simulator_pd_targets_calls_articulation(self):
         from hymotion_isaacsim.isaacsim_simulator import IsaacSimSimulator

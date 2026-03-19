@@ -175,6 +175,21 @@ def test_runtime_plans_steps_from_motion_metadata():
     assert runtime.plan_num_steps(motion) == 90
 
 
+def test_runtime_plans_steps_from_env_step_rate():
+    from hymotion_isaacsim.motion_file import MotionMetadata
+    from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+
+    assets = SimpleNamespace(
+        env_config=SimpleNamespace(_target_="env.target"),
+        agent_config=SimpleNamespace(_target_="agent.target"),
+        simulator_config=SimpleNamespace(sim=SimpleNamespace(fps=200, decimation=4)),
+    )
+    runtime = ProtoMotionsRuntime(tracker_assets=assets)
+    motion = MotionMetadata(path=Path("walk.motion"), fps=30, num_frames=60)
+
+    assert runtime.plan_num_steps(motion) == 100
+
+
 def test_runtime_extends_episode_length_for_full_motion(tmp_path, monkeypatch):
     from hymotion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
 

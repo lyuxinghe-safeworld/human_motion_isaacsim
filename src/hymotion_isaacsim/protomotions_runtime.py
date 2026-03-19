@@ -36,7 +36,11 @@ class ProtoMotionsRuntime:
 
     def plan_num_steps(self, motion_metadata, *, sim_fps: int = 30) -> int:
         clip_seconds = motion_metadata.duration_seconds
-        return int(clip_seconds * sim_fps)
+        sim_cfg = getattr(self.tracker_assets, "simulator_config", None)
+        sim = getattr(sim_cfg, "sim", None)
+        fps = getattr(sim, "fps", sim_fps)
+        decimation = max(1, int(getattr(sim, "decimation", 1)))
+        return int(clip_seconds * fps / decimation)
 
     def build_standalone_runner(
         self,

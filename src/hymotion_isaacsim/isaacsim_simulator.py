@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Tuple
 
+import numpy as np
 import torch
 
 from protomotions.simulator.base_simulator.simulator import Simulator
@@ -15,7 +16,7 @@ from protomotions.simulator.base_simulator.simulator_state import (
     ResetState,
     StateConversion,
 )
-from protomotions.robot_configs.base import RobotConfig
+from protomotions.robot_configs.base import ControlType, RobotConfig
 from protomotions.components.scene_lib import SceneLib
 from protomotions.components.terrains.terrain import Terrain
 
@@ -28,6 +29,12 @@ class IsaacSimSimulator(Simulator):
     ``self._simulation_app`` **before** ``super().__init__()`` is invoked, which is
     why those assignments appear at the top of ``__init__``.
     """
+
+    _FOLLOW_CAMERA_OFFSET = np.array([0.0, -5.5, 1.2], dtype=np.float32)
+    _FOLLOW_CAMERA_TARGET_OFFSET = np.array([0.0, 0.0, 0.7], dtype=np.float32)
+    _FOLLOW_CAMERA_FOCAL_LENGTH = 24.0
+    _FOLLOW_CAMERA_HORIZONTAL_APERTURE = 36.0
+    _FOLLOW_CAMERA_VERTICAL_APERTURE = 20.25
 
     def __init__(
         self,
@@ -62,8 +69,9 @@ class IsaacSimSimulator(Simulator):
     # ------------------------------------------------------------------
 
     def _create_simulation(self) -> None:
-        """No-op: the Isaac Sim world and articulation are created by the caller."""
-        pass
+        """Finalize the pre-built world for ProtoMotions control and visualization."""
+        self._configure_articulation_drives()
+        self._build_visualization_markers(self._visualization_markers)
 
     @property
     def _view(self):
@@ -146,6 +154,7 @@ class IsaacSimSimulator(Simulator):
         # Joint state
         self._articulation.set_joint_positions(_to_np(new_states.dof_pos.squeeze(0)))
         self._articulation.set_joint_velocities(_to_np(new_states.dof_vel.squeeze(0)))
+        self._update_articulation_kinematics()
 
     def _apply_root_velocity_impulse(
         self,
@@ -231,24 +240,46 @@ class IsaacSimSimulator(Simulator):
         and returns ``(num_bodies, 3)`` positions, ``(num_bodies, 4)``
         quaternions, and ``(num_bodies, 6)`` velocities.
         """
-        if self._body_rigid_view is None:
-            raise RuntimeError(
-                "_body_rigid_view not set — call set_body_rigid_view() before using the simulator"
-            )
+        physics_view = getattr(self._view, "_physics_view", None)
+        if physics_view is not None and self._view.is_physics_handle_valid():
+            self._update_articulation_kinematics()
+            num_bodies = len(self._view.body_names)
+            link_transforms = self._ensure_tensor(physics_view.get_link_transforms())
+            link_velocities = self._ensure_tensor(physics_view.get_link_velocities())
 
-        positions, quats = self._body_rigid_view.get_world_poses()
-        positions = self._ensure_tensor(positions)
-        quats = self._ensure_tensor(quats)
+            positions = link_transforms[:, :num_bodies, 0:3]
+            # Isaac Sim physics tensors expose quaternions as xyzw.
+            quats_xyzw = link_transforms[:, :num_bodies, 3:7]
+            quats = torch.cat([quats_xyzw[..., 3:4], quats_xyzw[..., :3]], dim=-1)
+            lin_vels = link_velocities[:, :num_bodies, 0:3]
+            ang_vels = link_velocities[:, :num_bodies, 3:6]
+        else:
+            if self._body_rigid_view is None:
+                raise RuntimeError(
+                    "_body_rigid_view not set — call set_body_rigid_view() before using the simulator"
+                )
 
-        vels = self._ensure_tensor(self._body_rigid_view.get_velocities())
-        lin_vels = vels[:, :3]
-        ang_vels = vels[:, 3:]
+            positions, quats = self._body_rigid_view.get_world_poses()
+            positions = self._ensure_tensor(positions)
+            quats = self._ensure_tensor(quats)
 
-        # RigidPrimView returns (num_bodies, dim) — add batch dim (1, num_bodies, dim)
-        positions = positions.unsqueeze(0)
-        quats = quats.unsqueeze(0)
-        lin_vels = lin_vels.unsqueeze(0)
-        ang_vels = ang_vels.unsqueeze(0)
+            vels = self._ensure_tensor(self._body_rigid_view.get_velocities())
+            lin_vels = vels[:, :3]
+            ang_vels = vels[:, 3:]
+
+            # The external RigidPrimView is constructed in robot-config/common order.
+            # Reorder into simulator articulation order before returning a SIMULATOR state.
+            body_view_to_sim = self._get_body_view_to_sim_order().to(positions.device)
+            positions = positions[body_view_to_sim]
+            quats = quats[body_view_to_sim]
+            lin_vels = lin_vels[body_view_to_sim]
+            ang_vels = ang_vels[body_view_to_sim]
+
+            # RigidPrimView returns (num_bodies, dim) — add batch dim (1, num_bodies, dim)
+            positions = positions.unsqueeze(0)
+            quats = quats.unsqueeze(0)
+            lin_vels = lin_vels.unsqueeze(0)
+            ang_vels = ang_vels.unsqueeze(0)
 
         if env_ids is not None:
             positions = positions[env_ids]
@@ -263,6 +294,36 @@ class IsaacSimSimulator(Simulator):
             rigid_body_ang_vel=ang_vels,
             state_conversion=StateConversion.SIMULATOR,
         )
+
+    def _get_body_view_to_sim_order(self) -> torch.Tensor:
+        """Map the common-order RigidPrimView body layout into articulation simulator order."""
+        if hasattr(self, "_body_view_to_sim_order"):
+            return self._body_view_to_sim_order
+
+        body_view_names = list(self.robot_config.kinematic_info.body_names)
+        name_to_body_view_idx = {name: idx for idx, name in enumerate(body_view_names)}
+        sim_body_names = list(self._view.body_names)
+        try:
+            indices = [name_to_body_view_idx[name] for name in sim_body_names]
+        except KeyError as exc:
+            missing_name = exc.args[0]
+            raise RuntimeError(
+                f"Body {missing_name!r} exists in articulation order but not in body_rigid_view order"
+            ) from exc
+
+        self._body_view_to_sim_order = torch.tensor(
+            indices, dtype=torch.long, device=self.device
+        )
+        return self._body_view_to_sim_order
+
+    def _update_articulation_kinematics(self) -> None:
+        """Refresh cached articulation link kinematics when the physics view supports it."""
+        world = getattr(self, "_world", None)
+        if world is None:
+            return
+        physics_sim_view = getattr(world, "physics_sim_view", None)
+        if physics_sim_view is not None:
+            physics_sim_view.update_articulations_kinematic()
 
     def _get_simulator_dof_state(
         self, env_ids: Optional[torch.Tensor] = None
@@ -434,6 +495,17 @@ class IsaacSimSimulator(Simulator):
             self._capture_viewport(vp, file_name)
             return
 
+        if self.headless:
+            rgba = self._capture_headless_follow_camera_rgba()
+            if hasattr(rgba, "numpy"):
+                rgba = rgba.numpy()
+            rgba = np.asarray(rgba)
+
+            from PIL import Image
+
+            Image.fromarray(rgba[:, :, :3]).save(file_name)
+            return
+
         # Lazy init: create camera, light, render product, and rgb annotator
         if not hasattr(self, '_rep_annotator') or self._rep_annotator is None:
             import omni.replicator.core as rep
@@ -452,12 +524,12 @@ class IsaacSimSimulator(Simulator):
             from pxr import UsdGeom, Gf
             self._cam_prim_path = "/World/FollowCamera"
             cam_prim = stage.DefinePrim(self._cam_prim_path, "Camera")
-            UsdGeom.Camera(cam_prim).GetClippingRangeAttr().Set(Gf.Vec2f(0.01, 10000.0))
+            self._configure_follow_camera_lens(UsdGeom.Camera(cam_prim))
 
             from omni.isaac.core.utils.viewports import set_camera_view
             set_camera_view(
-                eye=[2.5, -2.0, 1.5],
-                target=[0.0, -0.2, 0.5],
+                eye=self._FOLLOW_CAMERA_OFFSET,
+                target=self._FOLLOW_CAMERA_TARGET_OFFSET,
                 camera_prim_path=self._cam_prim_path,
             )
 
@@ -467,12 +539,11 @@ class IsaacSimSimulator(Simulator):
             self._rep_module = rep
 
         # Move camera to follow the humanoid using USD xform
-        import numpy as np
         root_pos = self._ensure_tensor(
             self._articulation.get_world_pose()[0]
         ).cpu().numpy()
-        eye = np.array([root_pos[0] + 3.0, root_pos[1] - 2.0, root_pos[2] + 2.0])
-        target = np.array([float(root_pos[0]), float(root_pos[1]), float(root_pos[2]) + 0.5])
+        eye = root_pos + self._FOLLOW_CAMERA_OFFSET
+        target = root_pos + self._FOLLOW_CAMERA_TARGET_OFFSET
 
         from omni.isaac.core.utils.viewports import set_camera_view
         set_camera_view(eye=eye, target=target, camera_prim_path=self._cam_prim_path)
@@ -484,12 +555,216 @@ class IsaacSimSimulator(Simulator):
             img = Image.fromarray(data[:, :, :3])
             img.save(file_name)
 
+    def prepare_headless_capture(self) -> None:
+        """Warm the headless follow-camera pipeline before the motion loop starts."""
+        if not self.headless or getattr(self, "_headless_capture_ready", False):
+            return
+
+        camera = self._ensure_headless_capture_camera()
+        for _ in range(3):
+            self._simulation_app.run_coroutine(self._world.render_async())
+            rgba = camera.get_rgba()
+            if rgba is not None and getattr(rgba, "size", 0) > 0:
+                self._headless_capture_ready = True
+                return
+
+        raise RuntimeError("Headless capture camera failed to warm up")
+
+    def _ensure_headless_capture_camera(self):
+        """Create a dedicated follow-camera sensor for drift-free headless capture."""
+        camera = getattr(self, "_headless_capture_camera", None)
+        if camera is not None:
+            return camera
+
+        from isaacsim.sensors.camera import Camera
+        from omni.isaac.core.utils.viewports import set_camera_view
+        from pxr import UsdLux, UsdGeom
+
+        stage = self._world.stage
+        light_path = "/World/DomeLight"
+        if not stage.GetPrimAtPath(light_path).IsValid():
+            light_prim = stage.DefinePrim(light_path, "DomeLight")
+            UsdLux.DomeLight(light_prim).GetIntensityAttr().Set(1000.0)
+
+        self._headless_capture_camera_path = "/World/FollowCamera"
+        camera = Camera(
+            prim_path=self._headless_capture_camera_path,
+            name="follow_camera_capture",
+            resolution=(1280, 720),
+        )
+        self._configure_follow_camera_lens(
+            UsdGeom.Camera(stage.GetPrimAtPath(self._headless_capture_camera_path))
+        )
+
+        root_pos = self._ensure_tensor(
+            self._articulation.get_world_pose()[0]
+        ).cpu().numpy()
+        set_camera_view(
+            eye=root_pos + self._FOLLOW_CAMERA_OFFSET,
+            target=root_pos + self._FOLLOW_CAMERA_TARGET_OFFSET,
+            camera_prim_path=self._headless_capture_camera_path,
+        )
+        camera.initialize()
+
+        self._headless_capture_camera = camera
+        self._headless_capture_ready = False
+        return camera
+
+    def _update_headless_capture_camera_pose(self) -> None:
+        """Keep the dedicated headless capture camera aligned to the humanoid root."""
+        from omni.isaac.core.utils.viewports import set_camera_view
+
+        root_pos = self._ensure_tensor(
+            self._articulation.get_world_pose()[0]
+        ).cpu().numpy()
+        set_camera_view(
+            eye=root_pos + self._FOLLOW_CAMERA_OFFSET,
+            target=root_pos + self._FOLLOW_CAMERA_TARGET_OFFSET,
+            camera_prim_path=self._headless_capture_camera_path,
+        )
+
+    def _capture_headless_follow_camera_rgba(self):
+        """Render the current headless frame without advancing physics."""
+        self.prepare_headless_capture()
+        self._update_headless_capture_camera_pose()
+        self._world.render()
+
+        rgba = self._headless_capture_camera.get_rgba()
+        if rgba is None or getattr(rgba, "size", 0) == 0:
+            raise RuntimeError("Headless capture camera returned an empty frame")
+        return rgba
+
+    def render(self) -> None:
+        """Update the interactive camera before delegating to ProtoMotions rendering."""
+        if not self.headless:
+            if not hasattr(self, "_perspective_view"):
+                from hymotion_isaacsim.protomotions_path import ensure_protomotions_importable
+
+                ensure_protomotions_importable()
+                from protomotions.simulator.isaaclab.utils.perspective_viewer import (
+                    PerspectiveViewer,
+                )
+                from pxr import UsdGeom
+
+                self._perspective_view = PerspectiveViewer()
+                self._configure_follow_camera_lens(
+                    UsdGeom.Camera(self._world.stage.GetPrimAtPath("/OmniverseKit_Persp"))
+                )
+                self._init_camera()
+            else:
+                self._update_camera()
+        super().render()
+
     def _init_camera(self) -> None:
-        """Initialize camera view. No-op for now; can be extended later."""
-        pass
+        """Initialize the active viewport to a wider follow-camera view."""
+        root_state = self._get_simulator_root_state()
+        char_root_pos = root_state.root_pos[self._camera_target["env"]].detach().cpu().numpy()
+        self._cam_prev_char_pos = char_root_pos
+        self._perspective_view.set_camera_view(
+            char_root_pos + self._FOLLOW_CAMERA_OFFSET,
+            char_root_pos + self._FOLLOW_CAMERA_TARGET_OFFSET,
+        )
+
+    def _update_camera(self) -> None:
+        """Keep the interactive camera tracking the humanoid root."""
+        if not hasattr(self, "_cam_prev_char_pos"):
+            self._init_camera()
+            return
+
+        root_state = self._get_simulator_root_state()
+        char_root_pos = root_state.root_pos[self._camera_target["env"]].detach().cpu().numpy()
+        cam_pos = np.array(self._perspective_view.get_camera_state())
+        cam_delta = cam_pos - self._cam_prev_char_pos
+        self._perspective_view.set_camera_view(
+            char_root_pos + cam_delta,
+            char_root_pos + self._FOLLOW_CAMERA_TARGET_OFFSET,
+        )
+        self._cam_prev_char_pos[:] = char_root_pos
 
     def _update_simulator_markers(
         self, markers_state: Optional[Dict] = None
     ) -> None:
-        """No-op. Visualization markers are optional and not yet supported."""
-        pass  # Markers not supported in pure Isaac Sim adapter
+        """Update visual marker prims from ProtoMotions marker state."""
+        if not markers_state:
+            return
+
+        marker_groups = getattr(self, "_marker_prim_groups", {})
+        for marker_name, state in markers_state.items():
+            marker_prims = marker_groups.get(marker_name)
+            if not marker_prims or state.translation.numel() == 0:
+                continue
+
+            positions = state.translation.detach().cpu().numpy().reshape(-1, 3)
+            orientations = state.orientation.detach().cpu().numpy().reshape(-1, 4)
+
+            for prim, position, orientation in zip(marker_prims, positions, orientations):
+                if np.linalg.norm(orientation) < 1e-6:
+                    orientation = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+                prim.set_world_pose(position=position, orientation=orientation)
+
+    def _configure_articulation_drives(self) -> None:
+        """Apply ProtoMotions drive mode, gains, and effort limits to the articulation."""
+        control_info = getattr(self.robot_config.control, "control_info", None)
+        if control_info is None:
+            return
+
+        dof_names = list(self._view.dof_names)
+        num_dof = len(dof_names)
+        kps = np.zeros((1, num_dof), dtype=np.float32)
+        kds = np.zeros((1, num_dof), dtype=np.float32)
+        max_efforts = np.zeros((1, num_dof), dtype=np.float32)
+
+        control_type = getattr(self, "control_type", self.robot_config.control.control_type)
+        use_builtin_pd = control_type == ControlType.BUILT_IN_PD
+        for idx, dof_name in enumerate(dof_names):
+            dof_info = control_info[dof_name]
+            if use_builtin_pd:
+                kps[0, idx] = float(dof_info.stiffness)
+                kds[0, idx] = float(dof_info.damping)
+            if dof_info.effort_limit is not None:
+                max_efforts[0, idx] = float(dof_info.effort_limit)
+
+        self._view.switch_control_mode(mode="position" if use_builtin_pd else "effort")
+        self._view.set_gains(kps=kps, kds=kds)
+        self._view.set_max_efforts(values=max_efforts)
+
+    def _configure_follow_camera_lens(self, camera) -> None:
+        """Configure a wide-angle lens so follow cameras show the full scene context."""
+        from pxr import Gf
+
+        camera.GetClippingRangeAttr().Set(Gf.Vec2f(0.01, 10000.0))
+        camera.GetFocalLengthAttr().Set(self._FOLLOW_CAMERA_FOCAL_LENGTH)
+        camera.GetHorizontalApertureAttr().Set(self._FOLLOW_CAMERA_HORIZONTAL_APERTURE)
+        camera.GetVerticalApertureAttr().Set(self._FOLLOW_CAMERA_VERTICAL_APERTURE)
+
+    def _build_visualization_markers(self, visualization_markers: Optional[Dict]) -> None:
+        """Create simple sphere markers for the non-headless ProtoMotions visualizations."""
+        self._marker_prim_groups = {}
+        if not visualization_markers:
+            return
+
+        from isaacsim.core.api.objects import VisualSphere
+
+        size_to_radius = {
+            "tiny": 0.007,
+            "small": 0.01,
+            "regular": 0.05,
+        }
+
+        for marker_name, marker_cfg in visualization_markers.items():
+            if marker_cfg.type != "sphere":
+                continue
+
+            color = np.array(marker_cfg.color, dtype=np.float32)
+            marker_prims = []
+            for idx, marker in enumerate(marker_cfg.markers):
+                radius = size_to_radius.get(marker.size, 0.05)
+                prim = VisualSphere(
+                    prim_path=f"/World/Visuals/{marker_name}_{idx:03d}",
+                    name=f"{marker_name}_{idx:03d}",
+                    color=color,
+                    radius=radius,
+                )
+                prim.initialize()
+                marker_prims.append(prim)
+            self._marker_prim_groups[marker_name] = marker_prims

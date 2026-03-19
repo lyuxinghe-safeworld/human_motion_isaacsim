@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+SCENE_ROOT_PRIM_PATH = "/World/custom_scene"
+
 SCENE_OBJECTS = [
     {
         "type": "cube",
-        "prim_path": "/World/custom_scene/box",
+        "prim_path": f"{SCENE_ROOT_PRIM_PATH}/box",
         "size": 1.0,
         "position": (2.0, 1.0, 0.5),
         "color": (0.8, 0.2, 0.2),
@@ -13,7 +15,7 @@ SCENE_OBJECTS = [
     },
     {
         "type": "cylinder",
-        "prim_path": "/World/custom_scene/cylinder",
+        "prim_path": f"{SCENE_ROOT_PRIM_PATH}/cylinder",
         "radius": 0.3,
         "height": 1.5,
         "position": (-1.0, 2.0, 0.75),
@@ -22,7 +24,7 @@ SCENE_OBJECTS = [
     },
     {
         "type": "sphere",
-        "prim_path": "/World/custom_scene/sphere",
+        "prim_path": f"{SCENE_ROOT_PRIM_PATH}/sphere",
         "radius": 0.5,
         "position": (1.0, -1.5, 0.5),
         "color": (0.2, 0.2, 0.8),
@@ -65,3 +67,24 @@ def populate_scene(world: Any) -> None:
     for obj in SCENE_OBJECTS:
         prim = _BUILDERS[obj["type"]](obj)
         world.scene.add(prim)
+
+
+def set_scene_origin(world: Any, origin: tuple[float, float, float]) -> None:
+    """Reposition the authored scene so its local origin follows the humanoid spawn."""
+    import numpy as np
+    from pxr import Gf
+
+    stage = world.stage
+    scene_origin = np.asarray(origin, dtype=np.float64)
+    if scene_origin.shape != (3,):
+        raise ValueError(f"Expected a 3D scene origin, got shape {scene_origin.shape}")
+
+    for obj in SCENE_OBJECTS:
+        prim = stage.GetPrimAtPath(obj["prim_path"])
+        if not prim.IsValid():
+            raise RuntimeError(f"Scene prim does not exist: {obj['prim_path']}")
+        position = np.asarray(obj["position"], dtype=np.float64) + scene_origin
+        translate_attr = prim.GetAttribute("xformOp:translate")
+        if not translate_attr.IsValid():
+            raise RuntimeError(f"Scene prim is missing xformOp:translate: {obj['prim_path']}")
+        translate_attr.Set(Gf.Vec3d(*position.tolist()))

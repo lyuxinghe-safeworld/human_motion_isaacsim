@@ -31,7 +31,72 @@ def parse_args():
         "--video-output", type=str, default="",
         help="Output MP4 path. If omitted, no video saved.",
     )
+    parser.add_argument(
+        "--reference-markers",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Render reference-motion marker spheres during headless video capture.",
+    )
     return parser.parse_args()
+
+
+def _align_scene_to_humanoid_root(world, simulator) -> None:
+    """Move the authored scene so its local origin stays near the humanoid spawn."""
+    from hymotion_isaacsim.custom_scene import set_scene_origin
+
+    root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
+    set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
+
+
+def _enable_reference_markers_for_capture(env, simulator) -> None:
+    """Create reference-motion markers even for headless video capture."""
+    if not simulator.headless:
+        return
+
+    visualization_markers = env.control_manager.create_visualization_markers(headless=False)
+    if visualization_markers:
+        simulator._build_visualization_markers(visualization_markers)
+
+
+def _update_reference_markers_for_capture(
+    env,
+    simulator,
+    enable_reference_markers: bool = True,
+) -> None:
+    """Update reference-motion markers during headless capture without enabling the viewport."""
+    if not simulator.headless or not enable_reference_markers:
+        return
+
+    original_headless = simulator.headless
+    simulator.headless = False
+    try:
+        markers_state = env.control_manager.get_markers_state()
+    finally:
+        simulator.headless = original_headless
+
+    simulator._update_simulator_markers(markers_state)
+
+
+def _prepare_headless_capture_for_video(
+    env,
+    simulator,
+    enable_reference_markers: bool = True,
+) -> None:
+    """Prime marker + camera capture state before the motion loop starts."""
+    if not simulator.headless:
+        return
+
+    if enable_reference_markers:
+        _enable_reference_markers_for_capture(env, simulator)
+    simulator.prepare_headless_capture()
+
+
+def _plan_motion_max_steps(duration_seconds: float, simulator_config) -> int:
+    """Convert clip duration into env steps instead of raw physics substeps."""
+    sim_cfg = getattr(simulator_config, "sim", None)
+    sim_fps = getattr(sim_cfg, "fps", 30)
+    decimation = max(1, int(getattr(sim_cfg, "decimation", 1)))
+    return int(duration_seconds * sim_fps / decimation)
 
 
 def build_scene(checkpoint_path: str, headless: bool):
@@ -112,6 +177,7 @@ def run_protomotions(
     checkpoint_path: str,
     headless: bool,
     video_output: str | None,
+    reference_markers: bool,
 ):
     """Run ProtoMotions agent to control the humanoid in our custom Isaac Sim scene."""
     from copy import deepcopy
@@ -169,8 +235,7 @@ def run_protomotions(
 
     # Compute max_steps from motion metadata
     motion_metadata = load_motion_metadata(motion_file)
-    sim_fps = getattr(simulator_config.sim, "fps", 30)
-    max_steps = int(motion_metadata.duration_seconds * sim_fps)
+    max_steps = _plan_motion_max_steps(motion_metadata.duration_seconds, simulator_config)
 
     if hasattr(env_config, "max_episode_length"):
         env_config.max_episode_length = max(env_config.max_episode_length, max_steps + 100)
@@ -226,6 +291,11 @@ def run_protomotions(
         video_path.parent.mkdir(parents=True, exist_ok=True)
         frames_dir = video_path.with_suffix("") / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
+        _prepare_headless_capture_for_video(
+            env,
+            simulator,
+            enable_reference_markers=reference_markers,
+        )
 
     # --- Inference loop ---
     agent.eval()
@@ -233,12 +303,19 @@ def run_protomotions(
     try:
         for step in range(max_steps):
             obs, _ = env.reset(done_indices)
+            if done_indices is None or done_indices.numel() > 0:
+                _align_scene_to_humanoid_root(world, simulator)
             obs = agent.add_agent_info_to_obs(obs)
             obs_td = agent.obs_dict_to_tensordict(obs)
             model_outs = agent.model(obs_td)
             actions = model_outs.get("mean_action", model_outs.get("action"))
             obs, rewards, dones, terminated, extras = env.step(actions)
             if frames_dir is not None:
+                _update_reference_markers_for_capture(
+                    env,
+                    simulator,
+                    enable_reference_markers=reference_markers,
+                )
                 frame_path = frame_path_for_step(frames_dir, step)
                 simulator._write_viewport_to_file(str(frame_path))
             done_indices = dones.nonzero(as_tuple=False).squeeze(-1)
@@ -272,6 +349,7 @@ def main():
             checkpoint_path=args.checkpoint,
             headless=args.headless,
             video_output=args.video_output if args.video_output else None,
+            reference_markers=args.reference_markers,
         )
 
 

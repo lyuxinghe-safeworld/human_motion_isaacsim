@@ -34,7 +34,26 @@ def _install_omni_stubs():
     sys.modules.setdefault("omni.isaac.core.objects", objects_mod)
 
 
+def _install_pxr_stubs():
+    """Install minimal pxr stubs for scene repositioning helpers."""
+
+    pxr_mod = types.ModuleType("pxr")
+    gf_mod = types.ModuleType("pxr.Gf")
+
+    class _FakeVec3d(tuple):
+        def __new__(cls, x, y, z):
+            return super().__new__(cls, (x, y, z))
+
+    gf_mod.Vec3d = _FakeVec3d
+
+    pxr_mod.Gf = gf_mod
+
+    sys.modules.setdefault("pxr", pxr_mod)
+    sys.modules.setdefault("pxr.Gf", gf_mod)
+
+
 _install_omni_stubs()
+_install_pxr_stubs()
 
 
 def test_populate_scene_adds_three_objects():
@@ -68,3 +87,46 @@ def test_scene_objects_are_static():
 
     for obj in SCENE_OBJECTS:
         assert obj.get("fixed_base", False) is True, f"{obj['prim_path']} is not static"
+
+
+def test_set_scene_origin_offsets_all_object_translations():
+    from hymotion_isaacsim.custom_scene import SCENE_OBJECTS, set_scene_origin
+
+    class _FakePrim:
+        def __init__(self):
+            self.translate = None
+
+        def IsValid(self):
+            return True
+
+        def GetAttribute(self, attr_name):
+            assert attr_name == "xformOp:translate"
+
+            class _FakeAttr:
+                def __init__(self, prim):
+                    self._prim = prim
+
+                def IsValid(self):
+                    return True
+
+                def Set(self, value):
+                    self._prim.translate = tuple(value)
+
+            return _FakeAttr(self)
+
+    class _FakeStage:
+        def __init__(self):
+            self._prims = {obj["prim_path"]: _FakePrim() for obj in SCENE_OBJECTS}
+
+        def GetPrimAtPath(self, prim_path):
+            return self._prims[prim_path]
+
+    stage = _FakeStage()
+    world = types.SimpleNamespace(stage=stage)
+
+    set_scene_origin(world, (10.0, 20.0, 0.0))
+
+    for obj in SCENE_OBJECTS:
+        prim = stage.GetPrimAtPath(obj["prim_path"])
+        expected = tuple(a + b for a, b in zip(obj["position"], (10.0, 20.0, 0.0)))
+        assert prim.translate == pytest.approx(expected)

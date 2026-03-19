@@ -1,7 +1,7 @@
 __all__ = [
     "MotionMetadata",
     "MotionRunResult",
-    "ProtoMotionIsaacSimController",
+    "MotionController",
     "load_motion_metadata",
     "viewport_capture",
 ]
@@ -16,10 +16,10 @@ def __getattr__(name: str):
         from human_motion_isaacsim.result import MotionRunResult
 
         return MotionRunResult
-    if name == "ProtoMotionIsaacSimController":
-        from human_motion_isaacsim.runtime import ProtoMotionIsaacSimController
+    if name == "MotionController":
+        from human_motion_isaacsim.motion_runner import MotionController
 
-        return ProtoMotionIsaacSimController
+        return MotionController
     if name == "load_motion_metadata":
         from human_motion_isaacsim.motion_file import load_motion_metadata
 

@@ -187,7 +187,7 @@ def run_protomotions(
 
     ensure_protomotions_importable()
 
-    # Disable torch.compile warmup (same rationale as protomotions_runtime.py)
+    # Disable torch.compile warmup (same rationale as motion_runner.py)
     from protomotions.envs import component_manager as component_manager_module
 
     component_manager_module.TORCH_COMPILE_AVAILABLE = False

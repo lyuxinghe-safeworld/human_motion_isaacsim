@@ -29,9 +29,9 @@ def main():
     # Isaac Lab / Isaac Sim must be imported before torch.
     import_simulator_before_torch("isaaclab")
 
-    from human_motion_isaacsim.protomotions_runtime import ProtoMotionsRuntime
+    from human_motion_isaacsim.motion_runner import MotionRunner
 
-    runtime = ProtoMotionsRuntime.from_checkpoint_path(args.checkpoint)
+    runtime = MotionRunner.from_checkpoint_path(args.checkpoint)
     result = runtime.run_standalone_motion(
         checkpoint_path=args.checkpoint,
         motion_file=args.motion_file,

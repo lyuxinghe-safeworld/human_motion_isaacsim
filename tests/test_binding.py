@@ -152,3 +152,30 @@ def test_validate_articulation_rejects_smpl_articulation_for_non_smpl_metadata()
             articulation,
             tracker_assets=checkpoint_layout,
         )
+
+
+def test_bind_fixed_humanoid_uses_tracker_layout_metadata():
+    import human_motion_isaacsim.binding as binding
+
+    articulation = SimpleNamespace(
+        body_names=("Pelvis", "Spine", "Tail"),
+        joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
+    )
+    tracker_assets = SimpleNamespace(
+        robot_config=SimpleNamespace(
+            kinematic_info=SimpleNamespace(
+                body_names=("Pelvis", "Spine", "Tail"),
+                joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
+            )
+        )
+    )
+
+    bound = binding.bind_fixed_humanoid(
+        "/World/Humanoid",
+        lookup_articulation=lambda _prim_path: articulation,
+        tracker_assets=tracker_assets,
+    )
+
+    assert bound.prim_path == "/World/Humanoid"
+    assert bound.body_names == ("Pelvis", "Spine", "Tail")
+    assert bound.joint_names == ("Pelvis_tx", "Pelvis_ty", "Pelvis_tz")

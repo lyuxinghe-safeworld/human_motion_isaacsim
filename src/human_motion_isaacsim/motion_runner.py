@@ -25,11 +25,12 @@ class MotionController:
         self.humanoid_prim_path = humanoid_prim_path
         self.checkpoint_path = Path(checkpoint_path)
         self.lookup_articulation = lookup_articulation
+        self.tracker_assets = load_assets(self.checkpoint_path)
         self.bound_humanoid = bind_humanoid(
             humanoid_prim_path,
             lookup_articulation=lookup_articulation,
+            tracker_assets=self.tracker_assets,
         )
-        self.tracker_assets = load_assets(self.checkpoint_path)
         self._motion_runner = motion_runner
         self._restore_rest_pose = restore_rest_pose
         self._busy = False

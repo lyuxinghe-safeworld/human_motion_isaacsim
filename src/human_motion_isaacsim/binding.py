@@ -6,7 +6,7 @@ from typing import Callable, Iterable, Any
 from human_motion_isaacsim.checkpoint import tracker_kinematic_layout
 
 
-EXPECTED_SMPL_BODY_NAMES = (
+_SMPL_BODY_NAMES = (
     "Pelvis",
     "L_Hip",
     "L_Knee",
@@ -33,7 +33,7 @@ EXPECTED_SMPL_BODY_NAMES = (
     "R_Hand",
 )
 
-EXPECTED_SMPL_JOINT_NAMES = (
+_SMPL_JOINT_NAMES = (
     "L_Hip_x",
     "L_Hip_y",
     "L_Hip_z",
@@ -126,9 +126,9 @@ def validate_humanoid_layout(
     body_names: Iterable[str],
     joint_names: Iterable[str],
     *,
-    expected_body_names: Iterable[str] = EXPECTED_SMPL_BODY_NAMES,
-    expected_joint_names: Iterable[str] = EXPECTED_SMPL_JOINT_NAMES,
-    model_label: str = "the expected ProtoMotions SMPL layout",
+    expected_body_names: Iterable[str],
+    expected_joint_names: Iterable[str],
+    model_label: str,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     body_names_tuple = _as_tuple(body_names)
     joint_names_tuple = _as_tuple(joint_names)
@@ -181,19 +181,20 @@ def bind_fixed_humanoid(
     prim_path: str,
     *,
     lookup_articulation: Callable[[str], Any],
+    tracker_assets: Any,
 ) -> BoundHumanoid:
     # NOTE(v2): This path is intentionally fixed for the first controller version.
     articulation = lookup_articulation(prim_path)
     if articulation is None:
         raise StageBindingError(f"Humanoid prim not found at {prim_path}")
 
-    body_names, joint_names = validate_humanoid_layout(
-        articulation.body_names,
-        articulation.joint_names,
+    bound = validate_articulation(
+        articulation,
+        tracker_assets=tracker_assets,
     )
     return BoundHumanoid(
         prim_path=prim_path,
         articulation=articulation,
-        body_names=body_names,
-        joint_names=joint_names,
+        body_names=bound.body_names,
+        joint_names=bound.joint_names,
     )

@@ -5,6 +5,20 @@ from typing import Any
 
 SCENE_ROOT_PRIM_PATH = "/World/custom_scene"
 GROUND_PLANE_PRIM_PATH = "/World/GroundPlane"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+SCENE_MODELS = {
+    "smpl": {
+        "asset_root": REPO_ROOT
+        / "third_party"
+        / "ProtoMotions"
+        / "protomotions"
+        / "data"
+        / "assets",
+        "usd_file": "usd/smpl_humanoid.usda",
+        "physics_fps": 120,
+    }
+}
 
 SCENE_OBJECTS = [
     {
@@ -103,27 +117,31 @@ def align_scene_to_humanoid_root(world: Any, simulator: Any) -> None:
     set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
 
 
+def _resolve_scene_model_config(model: str) -> dict[str, Any]:
+    try:
+        return SCENE_MODELS[model]
+    except KeyError as exc:
+        raise KeyError(f"Scene assets are not configured for model: {model}") from exc
+
+
 def build_scene(model: str, headless: bool):
     """Create the local Isaac Sim scene used by the wrapper script."""
     from isaacsim import SimulationApp
 
     simulation_app = SimulationApp({"headless": headless})
+    scene_model = _resolve_scene_model_config(model)
 
-    from human_motion_isaacsim._registry import resolve_tracker_assets
     from omni.isaac.core import World
     from omni.isaac.core.articulations import Articulation
     from omni.isaac.core.objects import GroundPlane
-    from omni.isaac.core.prims import RigidPrimView
     from omni.isaac.core.utils.stage import add_reference_to_stage
 
-    tracker_assets = resolve_tracker_assets(model)
-
-    fps = getattr(tracker_assets.simulator_config.sim, "fps", 60)
+    fps = int(scene_model.get("physics_fps", 60))
     world = World(physics_dt=1.0 / fps, rendering_dt=1.0 / fps)
     world.scene.add(GroundPlane(prim_path=GROUND_PLANE_PRIM_PATH, size=100.0))
 
-    asset_root = tracker_assets.robot_config.asset.asset_root
-    usd_file = tracker_assets.robot_config.asset.usd_asset_file_name
+    asset_root = Path(scene_model["asset_root"])
+    usd_file = str(scene_model["usd_file"])
     humanoid_usd_path = str(Path(asset_root) / usd_file)
     add_reference_to_stage(humanoid_usd_path, "/World/Humanoid")
     articulation = world.scene.add(
@@ -131,14 +149,4 @@ def build_scene(model: str, headless: bool):
     )
 
     populate_scene(world)
-
-    body_names = tracker_assets.robot_config.kinematic_info.body_names
-    body_prim_paths = [f"/World/Humanoid/bodies/{name}" for name in body_names]
-    body_rigid_view = RigidPrimView(
-        prim_paths_expr=body_prim_paths,
-        name="humanoid_bodies",
-    )
-    world.scene.add(body_rigid_view)
-    world.reset()
-
-    return simulation_app, world, articulation, body_rigid_view
+    return simulation_app, world, articulation

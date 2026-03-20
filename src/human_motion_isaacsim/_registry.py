@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 
@@ -26,3 +27,10 @@ def list_models() -> list[dict[str, str]]:
         }
         for model_name, metadata in registry.items()
     ]
+
+
+def resolve_tracker_assets(model_name: str, *, repo_root: str | Path | None = None) -> Any:
+    """Backward-compatible public wrapper around the checkpoint-backed asset resolver."""
+    from human_motion_isaacsim.checkpoint import _resolve_tracker_assets
+
+    return _resolve_tracker_assets(model_name, repo_root=repo_root)

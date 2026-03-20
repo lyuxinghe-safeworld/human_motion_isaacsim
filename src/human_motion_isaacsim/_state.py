@@ -70,10 +70,28 @@ def _resolve_simulation_app(world: Any, articulation: Any) -> Any | None:
 
 def _resolve_articulation_prim_path(articulation: Any) -> str:
     """Extract the USD prim path from an articulation, trying common attribute names."""
+    def _normalize(candidate: Any) -> str | None:
+        if not candidate:
+            return None
+
+        prim_path = str(candidate)
+        if "/bodies/" in prim_path:
+            prim_path = prim_path.split("/bodies/", 1)[0]
+        return prim_path or None
+
     for attr_name in ("prim_path", "_prim_path"):
-        prim_path = getattr(articulation, attr_name, None)
+        prim_path = _normalize(getattr(articulation, attr_name, None))
         if prim_path:
-            return str(prim_path)
+            return prim_path
+
+    articulation_view = getattr(articulation, "_articulation_view", None)
+    for attr_name in ("prim_paths", "_prim_paths", "_regex_prim_paths"):
+        prim_paths = getattr(articulation_view, attr_name, None)
+        if prim_paths:
+            prim_path = _normalize(prim_paths[0])
+            if prim_path:
+                return prim_path
+
     raise RuntimeError("Unable to determine articulation prim path for body view setup.")
 
 
@@ -101,21 +119,44 @@ def _cache_body_rigid_view(world: Any, articulation: Any, body_rigid_view: Any) 
                 continue
 
 
+def _resolve_stage_body_prim_paths(world: Any, articulation: Any) -> tuple[str, ...]:
+    """Inspect the live USD stage and return concrete body prim paths for the articulation."""
+    stage = getattr(world, "stage", None)
+    if stage is None:
+        return ()
+
+    articulation_prim_path = _resolve_articulation_prim_path(articulation)
+    bodies_prim = stage.GetPrimAtPath(f"{articulation_prim_path}/bodies")
+    is_valid = getattr(bodies_prim, "IsValid", None)
+    if not callable(is_valid) or not is_valid():
+        return ()
+
+    body_prim_paths = []
+    for child in bodies_prim.GetChildren():
+        child_path = child.GetPath()
+        body_prim_paths.append(getattr(child_path, "pathString", str(child_path)))
+    return tuple(body_prim_paths)
+
+
 def _build_body_rigid_view(world: Any, articulation: Any, tracker_assets: Any) -> Any | None:
-    """Construct a RigidPrimView covering every body in the tracker's kinematic layout.
+    """Construct a RigidPrimView covering every body in the live articulation.
 
-    Returns ``None`` when the tracker assets lack body-name metadata.
+    Prefers the live USD stage because that is the actual instantiated model.
+    Falls back to tracker metadata when stage introspection is unavailable.
     """
-    robot_config = getattr(tracker_assets, "robot_config", None)
-    kinematic_info = getattr(robot_config, "kinematic_info", None)
-    body_names = getattr(kinematic_info, "body_names", None)
-    if not body_names:
-        return None
-
     from omni.isaac.core.prims import RigidPrimView
 
-    prim_path = _resolve_articulation_prim_path(articulation)
-    body_prim_paths = [f"{prim_path}/bodies/{name}" for name in body_names]
+    body_prim_paths = list(_resolve_stage_body_prim_paths(world, articulation))
+    if not body_prim_paths:
+        robot_config = getattr(tracker_assets, "robot_config", None)
+        kinematic_info = getattr(robot_config, "kinematic_info", None)
+        body_names = getattr(kinematic_info, "body_names", None)
+        if not body_names:
+            return None
+
+        prim_path = _resolve_articulation_prim_path(articulation)
+        body_prim_paths = [f"{prim_path}/bodies/{name}" for name in body_names]
+
     view = RigidPrimView(
         prim_paths_expr=body_prim_paths,
         name=f"{getattr(articulation, 'name', 'humanoid')}_bodies",
@@ -126,10 +167,6 @@ def _build_body_rigid_view(world: Any, articulation: Any, tracker_assets: Any) -
         added_view = scene.add(view)
         if added_view is not None:
             view = added_view
-
-    initialize = getattr(view, "initialize", None)
-    if callable(initialize):
-        initialize()
 
     return view
 

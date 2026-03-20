@@ -23,10 +23,14 @@ def __getattr__(name: str):
         from human_motion_isaacsim.motion_runner import MotionController
 
         return MotionController
-    if name in {"init", "run", "list_models"}:
+    if name in {"init", "run"}:
         from human_motion_isaacsim import _api
 
         return getattr(_api, name)
+    if name == "list_models":
+        from human_motion_isaacsim._registry import list_models
+
+        return list_models
     if name == "load_motion_metadata":
         from human_motion_isaacsim.motion_file import load_motion_metadata
 

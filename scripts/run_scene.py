@@ -45,6 +45,7 @@ def run_standalone(world, simulation_app, headless: bool):
     """Run the scene with the humanoid in rest pose."""
     print("Running standalone mode (humanoid in rest pose). Press Ctrl+C to exit.")
     try:
+        world.reset()
         while simulation_app.is_running():
             world.step(render=not headless)
     except KeyboardInterrupt:
@@ -56,7 +57,6 @@ def run_standalone(world, simulation_app, headless: bool):
 def run_protomotions(
     world,
     articulation,
-    body_rigid_view,
     simulation_app,
     motion_file: str,
     model: str,
@@ -68,7 +68,6 @@ def run_protomotions(
     import human_motion_isaacsim as hmi
     from scene_utils import align_scene_to_humanoid_root
 
-    articulation.body_rigid_view = body_rigid_view
     world.simulation_app = simulation_app
     world.scene_alignment_callback = lambda simulator: align_scene_to_humanoid_root(
         world,
@@ -94,7 +93,7 @@ def main():
     args = parse_args()
     from scene_utils import build_scene
 
-    simulation_app, world, articulation, body_rigid_view = build_scene(
+    simulation_app, world, articulation = build_scene(
         args.model,
         args.headless,
     )
@@ -105,7 +104,6 @@ def main():
         run_protomotions(
             world=world,
             articulation=articulation,
-            body_rigid_view=body_rigid_view,
             simulation_app=simulation_app,
             motion_file=args.motion_file,
             model=args.model,

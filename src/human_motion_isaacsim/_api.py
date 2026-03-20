@@ -21,7 +21,7 @@ from human_motion_isaacsim.simulator_adapter import SimulatorAdapter
 from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
 
 
-def _enable_reference_markers_for_capture(env: Any, simulator: Any) -> None:
+def _init_reference_markers(env: Any, simulator: Any) -> None:
     """Create visualization markers for headless video capture when running without a display."""
     if not simulator.headless:
         return
@@ -31,7 +31,7 @@ def _enable_reference_markers_for_capture(env: Any, simulator: Any) -> None:
         simulator._build_visualization_markers(visualization_markers)
 
 
-def _update_reference_markers_for_capture(
+def _update_reference_markers(
     env: Any,
     simulator: Any,
     *,
@@ -62,7 +62,7 @@ def _prepare_headless_capture_for_video(
         return
 
     if enable_reference_markers:
-        _enable_reference_markers_for_capture(env, simulator)
+        _init_reference_markers(env, simulator)
     simulator.prepare_headless_capture()
 
 
@@ -198,9 +198,16 @@ def init(
     tracker_assets = _resolve_tracker_assets(model)
     simulation_app = _resolve_simulation_app(world, articulation)
     body_rigid_view = _resolve_body_rigid_view(world, articulation)
+    built_body_rigid_view = False
     if body_rigid_view is None and getattr(tracker_assets, "robot_config", None) is not None:
         body_rigid_view = _build_body_rigid_view(world, articulation, tracker_assets)
         _cache_body_rigid_view(world, articulation, body_rigid_view)
+        built_body_rigid_view = body_rigid_view is not None
+
+    if built_body_rigid_view:
+        reset = getattr(world, "reset", None)
+        if callable(reset):
+            reset()
 
     PACKAGE_STATE.teardown()
     PACKAGE_STATE.model_name = model
@@ -261,7 +268,7 @@ def run(
             actions = model_outs.get("mean_action", model_outs.get("action"))
             _, _, dones, _, _ = env.step(actions)
             if frames_dir is not None:
-                _update_reference_markers_for_capture(
+                _update_reference_markers(
                     env,
                     simulator,
                     enable_reference_markers=PACKAGE_STATE.reference_markers,

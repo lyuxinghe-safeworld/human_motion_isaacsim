@@ -7,88 +7,18 @@ from typing import Any
 
 from human_motion_isaacsim._registry import list_models as registry_list_models
 from human_motion_isaacsim.checkpoint import _resolve_tracker_assets
-from human_motion_isaacsim._state import PACKAGE_STATE
+from human_motion_isaacsim._state import (
+    PACKAGE_STATE,
+    _build_body_rigid_view,
+    _cache_body_rigid_view,
+    _resolve_body_rigid_view,
+    _resolve_scene_alignment_callback,
+    _resolve_simulation_app,
+)
 from human_motion_isaacsim.motion_file import load_motion_metadata
 from human_motion_isaacsim.result import MotionRunResult
 from human_motion_isaacsim.simulator_adapter import SimulatorAdapter
 from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
-
-
-def _resolve_simulation_app(world: Any, articulation: Any) -> Any | None:
-    for owner in (world, articulation):
-        for attr_name in ("simulation_app", "_simulation_app", "app", "_app"):
-            candidate = getattr(owner, attr_name, None)
-            if candidate is not None:
-                return candidate
-    return None
-
-
-def _resolve_articulation_prim_path(articulation: Any) -> str:
-    for attr_name in ("prim_path", "_prim_path"):
-        prim_path = getattr(articulation, attr_name, None)
-        if prim_path:
-            return str(prim_path)
-    raise RuntimeError("Unable to determine articulation prim path for body view setup.")
-
-
-def _resolve_body_rigid_view(world: Any, articulation: Any) -> Any | None:
-    for owner in (articulation, world):
-        for attr_name in ("body_rigid_view", "_body_rigid_view"):
-            candidate = getattr(owner, attr_name, None)
-            if candidate is not None:
-                return candidate
-    return None
-
-
-def _cache_body_rigid_view(world: Any, articulation: Any, body_rigid_view: Any) -> None:
-    if body_rigid_view is None:
-        return
-
-    for owner in (articulation, world):
-        for attr_name in ("body_rigid_view", "_body_rigid_view"):
-            try:
-                setattr(owner, attr_name, body_rigid_view)
-                return
-            except Exception:
-                continue
-
-
-def _build_body_rigid_view(world: Any, articulation: Any, tracker_assets: Any) -> Any | None:
-    robot_config = getattr(tracker_assets, "robot_config", None)
-    kinematic_info = getattr(robot_config, "kinematic_info", None)
-    body_names = getattr(kinematic_info, "body_names", None)
-    if not body_names:
-        return None
-
-    from omni.isaac.core.prims import RigidPrimView
-
-    prim_path = _resolve_articulation_prim_path(articulation)
-    body_prim_paths = [f"{prim_path}/bodies/{name}" for name in body_names]
-    view = RigidPrimView(
-        prim_paths_expr=body_prim_paths,
-        name=f"{getattr(articulation, 'name', 'humanoid')}_bodies",
-    )
-
-    scene = getattr(world, "scene", None)
-    if scene is not None and hasattr(scene, "add"):
-        added_view = scene.add(view)
-        if added_view is not None:
-            view = added_view
-
-    initialize = getattr(view, "initialize", None)
-    if callable(initialize):
-        initialize()
-
-    return view
-
-
-def _resolve_scene_alignment_callback(world: Any, articulation: Any) -> Any | None:
-    for owner in (world, articulation):
-        for attr_name in ("scene_alignment_callback", "_scene_alignment_callback"):
-            candidate = getattr(owner, attr_name, None)
-            if callable(candidate):
-                return candidate
-    return None
 
 
 def _enable_reference_markers_for_capture(env: Any, simulator: Any) -> None:

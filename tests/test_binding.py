@@ -1,26 +1,26 @@
 from types import SimpleNamespace
 
-import pytest
-
 
 def test_validate_articulation_uses_checkpoint_layout():
     import human_motion_isaacsim.binding as binding
 
     articulation = SimpleNamespace(
-        body_names=("Unexpected_Body",),
-        joint_names=("Unexpected_Joint",),
+        body_names=("Pelvis", "Spine", "Tail"),
+        joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
     )
     checkpoint_layout = SimpleNamespace(
         robot_config=SimpleNamespace(
             kinematic_info=SimpleNamespace(
-                body_names=("Pelvis", "Spine", "Chest"),
-                joint_names=("Pelvis_x", "Pelvis_y", "Pelvis_z"),
+                body_names=("Pelvis", "Spine", "Tail"),
+                joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
             )
         )
     )
 
-    with pytest.raises(binding.StageBindingError, match="layout|body names"):
-        binding.validate_articulation(
-            articulation,
-            tracker_assets=checkpoint_layout,
-        )
+    bound = binding.validate_articulation(
+        articulation,
+        tracker_assets=checkpoint_layout,
+    )
+
+    assert bound.body_names == checkpoint_layout.robot_config.kinematic_info.body_names
+    assert bound.joint_names == checkpoint_layout.robot_config.kinematic_info.joint_names

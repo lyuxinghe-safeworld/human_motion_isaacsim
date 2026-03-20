@@ -38,8 +38,8 @@ def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None
         raise FileNotFoundError(f"ProtoMotions checkout not found at {root}")
 
     root_str = str(root)
-    if root_str not in sys.path:
-        sys.path.insert(0, root_str)
+    sys.path[:] = [path for path in sys.path if path != root_str]
+    sys.path.insert(0, root_str)
 
     stale_modules = [
         module_name

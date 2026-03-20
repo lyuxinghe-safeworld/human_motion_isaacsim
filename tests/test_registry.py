@@ -91,11 +91,14 @@ def test_load_tracker_assets_explicit_protomotions_override_replaces_stale_impor
     resolved = checkpoint.parent / "resolved_configs_inference.pt"
     resolved.write_bytes(b"placeholder")
 
+    monkeypatch.syspath_prepend(str(override_root))
     monkeypatch.syspath_prepend(str(stale_root))
     importlib.invalidate_caches()
     sys.modules.pop("protomotions", None)
     sys.modules.pop("protomotions.marker", None)
     importlib.import_module("protomotions.marker")
+
+    assert sys.path.index(str(stale_root)) < sys.path.index(str(override_root))
 
     def fake_load(*args, **kwargs):
         marker = importlib.import_module("protomotions.marker")

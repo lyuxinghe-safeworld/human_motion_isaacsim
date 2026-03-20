@@ -40,6 +40,35 @@ def parse_args():
     return parser.parse_args()
 
 
+def _align_scene_to_humanoid_root(world, simulator) -> None:
+    """Keep the authored local scene centered on the humanoid spawn/reset point."""
+    from human_motion_isaacsim.custom_scene import set_scene_origin
+
+    root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
+    set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
+
+
+def _resolve_model_for_checkpoint(checkpoint_path: str) -> str:
+    """Map the wrapper checkpoint argument onto a registered public model name."""
+    import human_motion_isaacsim as hmi
+    from human_motion_isaacsim._registry import resolve_tracker_assets
+
+    checkpoint = Path(checkpoint_path).resolve()
+    for model_entry in hmi.list_models():
+        model_name = model_entry["name"]
+        try:
+            tracker_assets = resolve_tracker_assets(model_name)
+        except FileNotFoundError:
+            continue
+        if tracker_assets.checkpoint_path.resolve() == checkpoint:
+            return model_name
+
+    raise ValueError(
+        f"Checkpoint {checkpoint} does not match any registered model. "
+        "Use a checkpoint that belongs to a supported model."
+    )
+
+
 def build_scene(checkpoint_path: str, headless: bool):
     """Create the Isaac Sim world with ground plane, humanoid, and static objects.
 
@@ -122,8 +151,12 @@ def run_protomotions(
     """Run ProtoMotions control through the package-owned API."""
     import human_motion_isaacsim as hmi
 
-    articulation._body_rigid_view = body_rigid_view
-    world._simulation_app = simulation_app
+    articulation.body_rigid_view = body_rigid_view
+    world.simulation_app = simulation_app
+    world.scene_alignment_callback = lambda simulator: _align_scene_to_humanoid_root(
+        world,
+        simulator,
+    )
     try:
         hmi.init(
             model=model,
@@ -142,7 +175,8 @@ def run_protomotions(
 
 def main():
     args = parse_args()
-    simulation_app, world, articulation, body_rigid_view, tracker_assets = build_scene(
+    model = _resolve_model_for_checkpoint(args.checkpoint)
+    simulation_app, world, articulation, body_rigid_view, _tracker_assets = build_scene(
         args.checkpoint, args.headless,
     )
 
@@ -155,7 +189,7 @@ def main():
             body_rigid_view=body_rigid_view,
             simulation_app=simulation_app,
             motion_file=args.motion_file,
-            model="smpl",
+            model=model,
             headless=args.headless,
             video_output=args.video_output if args.video_output else None,
             reference_markers=args.reference_markers,

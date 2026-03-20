@@ -1,5 +1,6 @@
 import pytest
 import torch
+from types import SimpleNamespace
 
 
 def test_init_is_exported():
@@ -83,7 +84,6 @@ def test_run_after_init_executes_tracking_loop(monkeypatch, tmp_path):
         }
 
     monkeypatch.setattr(_api, "_build_runtime_bundle", fake_build_runtime_bundle)
-    monkeypatch.setattr(_api, "_align_scene_to_humanoid_root", lambda world, simulator: None)
     monkeypatch.setattr(
         _api,
         "compile_video",
@@ -174,6 +174,63 @@ def test_failed_reinit_preserves_last_successful_state(monkeypatch):
 
     assert result.success is True
     assert result.num_steps == 0
+
+    PACKAGE_STATE.teardown()
+
+
+def test_init_clears_stale_simulation_app_when_new_binding_has_none(monkeypatch):
+    import human_motion_isaacsim as hmi
+    from human_motion_isaacsim import _api
+    from human_motion_isaacsim._state import PACKAGE_STATE
+
+    PACKAGE_STATE.teardown()
+    monkeypatch.setattr(_api, "resolve_tracker_assets", lambda model: object())
+
+    first_world = SimpleNamespace(simulation_app=object())
+    hmi.init("smpl", world=first_world, articulation=object())
+    assert PACKAGE_STATE.simulation_app is first_world.simulation_app
+
+    hmi.init("smpl", world=object(), articulation=object())
+
+    assert PACKAGE_STATE.simulation_app is None
+
+    PACKAGE_STATE.teardown()
+
+
+def test_init_caches_created_body_view_for_reuse(monkeypatch):
+    import human_motion_isaacsim as hmi
+    from human_motion_isaacsim import _api
+    from human_motion_isaacsim._state import PACKAGE_STATE
+
+    tracker_assets = SimpleNamespace(robot_config=object())
+    created_body_view = object()
+    build_calls = []
+    articulation = SimpleNamespace()
+
+    PACKAGE_STATE.teardown()
+    monkeypatch.setattr(_api, "resolve_tracker_assets", lambda model: tracker_assets)
+
+    def fake_build_body_rigid_view(world, articulation_arg, tracker_assets_arg):
+        build_calls.append((world, articulation_arg, tracker_assets_arg))
+        return created_body_view
+
+    monkeypatch.setattr(_api, "_build_body_rigid_view", fake_build_body_rigid_view)
+
+    hmi.init("smpl", world=object(), articulation=articulation)
+
+    assert PACKAGE_STATE.body_rigid_view is created_body_view
+    assert articulation.body_rigid_view is created_body_view
+    assert len(build_calls) == 1
+
+    monkeypatch.setattr(
+        _api,
+        "_build_body_rigid_view",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should reuse body view")),
+    )
+
+    hmi.init("smpl", world=object(), articulation=articulation)
+
+    assert PACKAGE_STATE.body_rigid_view is created_body_view
 
     PACKAGE_STATE.teardown()
 

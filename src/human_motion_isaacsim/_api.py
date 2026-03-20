@@ -42,6 +42,19 @@ def _resolve_body_rigid_view(world: Any, articulation: Any) -> Any | None:
     return None
 
 
+def _cache_body_rigid_view(world: Any, articulation: Any, body_rigid_view: Any) -> None:
+    if body_rigid_view is None:
+        return
+
+    for owner in (articulation, world):
+        for attr_name in ("body_rigid_view", "_body_rigid_view"):
+            try:
+                setattr(owner, attr_name, body_rigid_view)
+                return
+            except Exception:
+                continue
+
+
 def _build_body_rigid_view(world: Any, articulation: Any, tracker_assets: Any) -> Any | None:
     robot_config = getattr(tracker_assets, "robot_config", None)
     kinematic_info = getattr(robot_config, "kinematic_info", None)
@@ -71,11 +84,13 @@ def _build_body_rigid_view(world: Any, articulation: Any, tracker_assets: Any) -
     return view
 
 
-def _align_scene_to_humanoid_root(world: Any, simulator: Any) -> None:
-    from human_motion_isaacsim.custom_scene import set_scene_origin
-
-    root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
-    set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
+def _resolve_scene_alignment_callback(world: Any, articulation: Any) -> Any | None:
+    for owner in (world, articulation):
+        for attr_name in ("scene_alignment_callback", "_scene_alignment_callback"):
+            candidate = getattr(owner, attr_name, None)
+            if callable(candidate):
+                return candidate
+    return None
 
 
 def _enable_reference_markers_for_capture(env: Any, simulator: Any) -> None:
@@ -250,6 +265,7 @@ def init(
     body_rigid_view = _resolve_body_rigid_view(world, articulation)
     if body_rigid_view is None and getattr(tracker_assets, "robot_config", None) is not None:
         body_rigid_view = _build_body_rigid_view(world, articulation, tracker_assets)
+        _cache_body_rigid_view(world, articulation, body_rigid_view)
 
     PACKAGE_STATE.teardown()
     PACKAGE_STATE.model_name = model
@@ -259,8 +275,7 @@ def init(
     PACKAGE_STATE.body_rigid_view = body_rigid_view
     PACKAGE_STATE.headless = headless
     PACKAGE_STATE.reference_markers = reference_markers
-    if simulation_app is not None:
-        PACKAGE_STATE.simulation_app = simulation_app
+    PACKAGE_STATE.simulation_app = simulation_app
 
 
 def run(
@@ -298,7 +313,12 @@ def run(
         for step in range(max_steps):
             obs, _ = env.reset(done_indices)
             if done_indices is None or done_indices.numel() > 0:
-                _align_scene_to_humanoid_root(PACKAGE_STATE.world, simulator)
+                scene_alignment_callback = _resolve_scene_alignment_callback(
+                    PACKAGE_STATE.world,
+                    PACKAGE_STATE.articulation,
+                )
+                if scene_alignment_callback is not None:
+                    scene_alignment_callback(simulator)
             obs = agent.add_agent_info_to_obs(obs)
             obs_td = agent.obs_dict_to_tensordict(obs)
             model_outs = agent.model(obs_td)

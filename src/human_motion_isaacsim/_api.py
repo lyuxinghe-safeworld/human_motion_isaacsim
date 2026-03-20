@@ -22,6 +22,7 @@ from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for
 
 
 def _enable_reference_markers_for_capture(env: Any, simulator: Any) -> None:
+    """Create visualization markers for headless video capture when running without a display."""
     if not simulator.headless:
         return
 
@@ -36,6 +37,7 @@ def _update_reference_markers_for_capture(
     *,
     enable_reference_markers: bool,
 ) -> None:
+    """Refresh visualization marker positions for the current frame during headless capture."""
     if not simulator.headless or not enable_reference_markers:
         return
 
@@ -55,6 +57,7 @@ def _prepare_headless_capture_for_video(
     *,
     enable_reference_markers: bool,
 ) -> None:
+    """Initialize the headless capture pipeline and optional reference markers before the motion loop."""
     if not simulator.headless:
         return
 
@@ -64,6 +67,7 @@ def _prepare_headless_capture_for_video(
 
 
 def _plan_motion_max_steps(duration_seconds: float, simulator_config: Any) -> int:
+    """Calculate the number of simulation steps needed for a motion of the given duration."""
     sim_cfg = getattr(simulator_config, "sim", None)
     sim_fps = getattr(sim_cfg, "fps", 30)
     decimation = max(1, int(getattr(sim_cfg, "decimation", 1)))
@@ -71,6 +75,7 @@ def _plan_motion_max_steps(duration_seconds: float, simulator_config: Any) -> in
 
 
 def _build_runtime_bundle(motion_path: Path) -> dict[str, Any]:
+    """Assemble all ProtoMotions components (fabric, env, agent, simulator) for a single motion run."""
     if PACKAGE_STATE.tracker_assets is None:
         raise RuntimeError("human_motion_isaacsim.init() must be called before run().")
 
@@ -166,6 +171,7 @@ def _build_runtime_bundle(motion_path: Path) -> dict[str, Any]:
 
 
 def _teardown_run_helpers(helpers: list[Any]) -> None:
+    """Call the first available teardown method on each helper, re-raising the first error encountered."""
     first_error: Exception | None = None
     for helper in helpers:
         for method_name in ("teardown", "destroy", "shutdown", "close"):
@@ -188,6 +194,7 @@ def init(
     headless: bool = True,
     reference_markers: bool = False,
 ) -> None:
+    """Initialize the package state with a model, world, and articulation for subsequent motion runs."""
     tracker_assets = _resolve_tracker_assets(model)
     simulation_app = _resolve_simulation_app(world, articulation)
     body_rigid_view = _resolve_body_rigid_view(world, articulation)
@@ -210,6 +217,7 @@ def run(
     motion_file: str | Path,
     video_output: str | Path | None = None,
 ) -> MotionRunResult:
+    """Execute a motion-tracking loop and optionally produce a video, returning a MotionRunResult."""
     if PACKAGE_STATE.model_name is None:
         raise RuntimeError("human_motion_isaacsim.init() must be called before run().")
 
@@ -279,4 +287,5 @@ def run(
 
 
 def list_models() -> list[dict[str, str]]:
+    """Return the list of available models from the registry."""
     return registry_list_models()

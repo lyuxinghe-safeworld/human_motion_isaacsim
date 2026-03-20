@@ -8,16 +8,20 @@ import torch
 
 @dataclass(slots=True)
 class MotionMetadata:
+    """Lightweight descriptor for a .motion file: path, frame rate, and frame count."""
+
     path: Path
     fps: int
     num_frames: int
 
     @property
     def duration_seconds(self) -> float:
+        """Total clip duration computed from frame count and FPS."""
         return self.num_frames / self.fps
 
 
 def load_motion_metadata(path: str | Path) -> MotionMetadata:
+    """Read a .motion file and return its metadata without loading full tensor data."""
     motion_path = Path(path)
     if motion_path.suffix != ".motion":
         raise ValueError(f"Motion file must use the .motion suffix: {motion_path}")

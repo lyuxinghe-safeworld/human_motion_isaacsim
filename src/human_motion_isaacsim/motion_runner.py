@@ -12,6 +12,7 @@ from human_motion_isaacsim.protomotions_path import ensure_protomotions_importab
 
 
 def _bind_humanoid_supports_tracker_assets(bind_humanoid: Callable[..., Any]) -> bool:
+    """Check whether a bind_humanoid callable accepts a tracker_assets keyword argument."""
     try:
         parameters = inspect.signature(bind_humanoid).parameters.values()
     except (TypeError, ValueError):
@@ -24,6 +25,8 @@ def _bind_humanoid_supports_tracker_assets(bind_humanoid: Callable[..., Any]) ->
 
 
 class MotionController:
+    """High-level controller that binds a humanoid articulation and runs motion-tracking sequences."""
+
     def __init__(
         self,
         *,
@@ -35,6 +38,7 @@ class MotionController:
         motion_runner: Callable[[Any, Any, str | Path | None], Any] | None = None,
         restore_rest_pose: Callable[[Any], None] | None = None,
     ) -> None:
+        """Bind a humanoid articulation and load tracker assets from the given checkpoint."""
         self.humanoid_prim_path = humanoid_prim_path
         self.checkpoint_path = Path(checkpoint_path)
         self.lookup_articulation = lookup_articulation
@@ -55,6 +59,7 @@ class MotionController:
         self._busy = False
 
     def run_motion(self, motion_file: str, video_output: str | None = None):
+        """Execute a single motion file, optionally capturing video, and return the result."""
         if self._busy:
             raise RuntimeError("Motion execution already in progress")
 
@@ -83,6 +88,8 @@ class MotionController:
 
 @dataclass(slots=True)
 class MotionRunner:
+    """Lightweight runner that builds and executes a standalone ProtoMotions inference pipeline."""
+
     tracker_assets: Any
     simulator_name: str = "isaaclab"
 
@@ -93,6 +100,7 @@ class MotionRunner:
         *,
         simulator_name: str = "isaaclab",
     ) -> "MotionRunner":
+        """Create a MotionRunner by loading tracker assets from a checkpoint path."""
         from human_motion_isaacsim.checkpoint import load_tracker_assets as _load
 
         return cls(
@@ -102,13 +110,16 @@ class MotionRunner:
 
     @property
     def env_target(self) -> str | None:
+        """Return the Hydra target string for the environment class, if available."""
         return getattr(self.tracker_assets.env_config, "_target_", None)
 
     @property
     def agent_target(self) -> str | None:
+        """Return the Hydra target string for the agent class, if available."""
         return getattr(self.tracker_assets.agent_config, "_target_", None)
 
     def plan_num_steps(self, motion_metadata, *, sim_fps: int = 30) -> int:
+        """Calculate the number of simulation steps for the given motion metadata and FPS."""
         clip_seconds = motion_metadata.duration_seconds
         sim_cfg = getattr(self.tracker_assets, "simulator_config", None)
         sim = getattr(sim_cfg, "sim", None)
@@ -126,6 +137,7 @@ class MotionRunner:
         enable_cameras: bool = False,
         num_envs: int = 1,
     ) -> dict[str, Any]:
+        """Build all ProtoMotions components for a standalone inference session."""
         from copy import deepcopy
         from dataclasses import asdict
 
@@ -244,6 +256,7 @@ class MotionRunner:
         headless: bool = False,
         num_envs: int = 1,
     ):
+        """Execute a full standalone motion-tracking run with video capture."""
         ensure_protomotions_importable()
         from protomotions.utils.simulator_imports import import_simulator_before_torch
 

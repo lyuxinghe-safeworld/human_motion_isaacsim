@@ -6,6 +6,8 @@ from pathlib import Path
 
 @dataclass(slots=True)
 class MotionRunResult:
+    """Outcome of a single motion-tracking run, including optional video path and metrics."""
+
     success: bool
     motion_file: Path
     video_output: Path | None = None
@@ -16,6 +18,7 @@ class MotionRunResult:
 
     @property
     def output_video_path(self) -> Path | None:
+        """Alias for video_output, kept for backward compatibility."""
         return self.video_output
 
     @output_video_path.setter

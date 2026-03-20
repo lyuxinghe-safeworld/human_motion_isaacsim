@@ -15,6 +15,8 @@ from human_motion_isaacsim.protomotions_path import ensure_protomotions_importab
 
 @dataclass(slots=True)
 class TrackerAssets:
+    """Immutable bundle of paths and deserialized configs loaded from a tracker checkpoint."""
+
     checkpoint_path: Path
     resolved_config_path: Path
     robot_config: Any
@@ -27,6 +29,7 @@ class TrackerAssets:
 
 
 def tracker_kinematic_layout(tracker_assets: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Extract body and joint name tuples from a TrackerAssets' robot config."""
     robot_config = getattr(tracker_assets, "robot_config", None)
     kinematic_info = getattr(robot_config, "kinematic_info", None)
     body_names = getattr(kinematic_info, "body_names", None)
@@ -39,10 +42,12 @@ def tracker_kinematic_layout(tracker_assets: Any) -> tuple[tuple[str, ...], tupl
 
 
 def _protomotions_root() -> Path:
+    """Convenience wrapper returning the resolved ProtoMotions package root."""
     return resolve_protomotions_root()
 
 
 def _loaded_protomotions_root() -> Path | None:
+    """Return the root of the currently-imported protomotions package, or None if not loaded."""
     module = sys.modules.get("protomotions")
     module_file = getattr(module, "__file__", None) if module is not None else None
     if not module_file:
@@ -51,6 +56,7 @@ def _loaded_protomotions_root() -> Path | None:
 
 
 def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None = None) -> Path:
+    """Ensure the protomotions package from the given root is importable, hot-swapping if needed."""
     if protomotions_root is None:
         return ensure_protomotions_importable()
 
@@ -80,6 +86,7 @@ def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None
 
 
 def _normalize_robot_asset_root(robot_config: Any, *, protomotions_root: str | Path | None = None) -> None:
+    """Convert a relative robot asset root to an absolute path anchored at the ProtoMotions root."""
     asset = getattr(robot_config, "asset", None)
     if asset is None:
         return
@@ -91,6 +98,7 @@ def _normalize_robot_asset_root(robot_config: Any, *, protomotions_root: str | P
 
 
 def resolved_config_path_for_checkpoint(checkpoint_path: str | Path) -> Path:
+    """Return the expected path of the resolved-config sidecar for a given checkpoint file."""
     checkpoint = Path(checkpoint_path).resolve()
     return checkpoint.parent / "resolved_configs_inference.pt"
 
@@ -98,6 +106,7 @@ def resolved_config_path_for_checkpoint(checkpoint_path: str | Path) -> Path:
 def load_tracker_assets(
     checkpoint_path: str | Path, *, protomotions_root: str | Path | None = None
 ) -> TrackerAssets:
+    """Load a TrackerAssets bundle from a checkpoint file and its resolved-config sidecar."""
     checkpoint = Path(checkpoint_path).resolve()
     resolved = resolved_config_path_for_checkpoint(checkpoint)
     if not resolved.exists():

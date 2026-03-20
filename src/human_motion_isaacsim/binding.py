@@ -7,11 +7,13 @@ from human_motion_isaacsim.checkpoint import tracker_kinematic_layout
 
 
 class StageBindingError(ValueError):
-    """Raised when the controller cannot bind to the expected humanoid."""
+    """Raised when the controller cannot bind to the expected humanoid articulation."""
 
 
 @dataclass(slots=True)
 class BoundHumanoid:
+    """A validated humanoid articulation with confirmed body and joint name layout."""
+
     prim_path: str
     articulation: Any
     body_names: tuple[str, ...]
@@ -19,10 +21,12 @@ class BoundHumanoid:
 
 
 def _as_tuple(names: Iterable[str]) -> tuple[str, ...]:
+    """Coerce an iterable of strings into a tuple."""
     return tuple(names)
 
 
 def _tracker_layout_for_binding(tracker_assets: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Extract the expected kinematic layout from tracker assets, raising StageBindingError on failure."""
     try:
         return tracker_kinematic_layout(tracker_assets)
     except (TypeError, ValueError) as exc:
@@ -40,6 +44,7 @@ def validate_humanoid_layout(
     expected_joint_names: Iterable[str],
     model_label: str,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Compare articulation body/joint names against expected names, raising on mismatch."""
     body_names_tuple = _as_tuple(body_names)
     joint_names_tuple = _as_tuple(joint_names)
     expected_body_names_tuple = _as_tuple(expected_body_names)
@@ -65,6 +70,7 @@ def validate_articulation(
     *,
     tracker_assets: Any,
 ) -> BoundHumanoid:
+    """Validate that an articulation matches the tracker's expected kinematic layout."""
     expected_body_names, expected_joint_names = _tracker_layout_for_binding(tracker_assets)
     checkpoint_path = getattr(tracker_assets, "checkpoint_path", None)
     model_label = (
@@ -93,6 +99,7 @@ def bind_fixed_humanoid(
     lookup_articulation: Callable[[str], Any],
     tracker_assets: Any,
 ) -> BoundHumanoid:
+    """Look up an articulation by prim path and validate it against tracker asset metadata."""
     # NOTE(v2): This path is intentionally fixed for the first controller version.
     articulation = lookup_articulation(prim_path)
     if articulation is None:

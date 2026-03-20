@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 def _explicit_protomotions_root() -> Path | None:
+    """Return the ProtoMotions root from PROTOMOTIONS_ROOT or PROTO_MOTIONS_ROOT env vars, if set."""
     configured = os.environ.get("PROTOMOTIONS_ROOT") or os.environ.get("PROTO_MOTIONS_ROOT")
     if configured:
         return Path(configured).expanduser().resolve()
@@ -14,22 +15,27 @@ def _explicit_protomotions_root() -> Path | None:
 
 
 def _repo_root() -> Path:
+    """Return the repository root based on this source file's location."""
     return Path(__file__).resolve().parents[2]
 
 
 def _repo_local_protomotions_root() -> Path:
+    """Return the path to the vendored ProtoMotions checkout under third_party/."""
     return (_repo_root() / "third_party" / "ProtoMotions").resolve()
 
 
 def _legacy_protomotions_root() -> Path:
+    """Return the legacy ~/code/ProtoMotions path used before vendoring."""
     return (Path.home() / "code" / "ProtoMotions").resolve()
 
 
 def _is_protomotions_repo(root: Path) -> bool:
+    """Check whether the given directory contains a protomotions Python package."""
     return (root / "protomotions" / "__init__.py").exists()
 
 
 def resolve_protomotions_root() -> Path:
+    """Find the ProtoMotions root by checking imports, env vars, and well-known paths."""
     spec = find_spec("protomotions")
     if spec is not None and spec.origin is not None:
         return Path(spec.origin).resolve().parent.parent
@@ -57,6 +63,7 @@ def resolve_protomotions_root() -> Path:
 
 
 def ensure_protomotions_importable() -> Path:
+    """Ensure the protomotions package is importable, adding its root to sys.path if needed."""
     spec = find_spec("protomotions")
     if spec is not None and spec.origin is not None:
         return Path(spec.origin).resolve().parent.parent

@@ -7,6 +7,7 @@ from human_motion_isaacsim.checkpoint import TrackerAssets
 
 
 def _teardown_helper(helper: Any) -> None:
+    """Call the first recognized teardown method on the given helper object."""
     for method_name in ("teardown", "destroy", "shutdown", "close"):
         method = getattr(helper, method_name, None)
         if callable(method):
@@ -16,6 +17,8 @@ def _teardown_helper(helper: Any) -> None:
 
 @dataclass(slots=True)
 class PackageState:
+    """Global mutable state for the initialized model, world, articulation, and related objects."""
+
     model_name: str | None = None
     tracker_assets: TrackerAssets | None = None
     world: Any | None = None
@@ -27,6 +30,7 @@ class PackageState:
     owned_helpers: list[Any] = field(default_factory=list)
 
     def teardown(self) -> None:
+        """Reset all fields to defaults, tearing down owned helpers but preserving the simulation app."""
         first_error: Exception | None = None
         try:
             for helper in self.owned_helpers:

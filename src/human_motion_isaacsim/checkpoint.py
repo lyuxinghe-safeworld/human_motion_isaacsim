@@ -9,6 +9,7 @@ from typing import Any
 
 import torch
 
+from human_motion_isaacsim._registry import _load_registry
 from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable, resolve_protomotions_root
 
 
@@ -120,9 +121,6 @@ def load_tracker_assets(
         env_config=configs["env"],
         agent_config=configs["agent"],
     )
-
-
-from human_motion_isaacsim._registry import _load_registry
 
 
 def _default_repo_root() -> Path:

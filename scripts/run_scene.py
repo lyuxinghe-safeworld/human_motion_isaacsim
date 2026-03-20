@@ -40,14 +40,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def _align_scene_to_humanoid_root(world, simulator) -> None:
-    """Keep the authored local scene centered on the humanoid spawn/reset point."""
-    from human_motion_isaacsim.custom_scene import set_scene_origin
-
-    root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
-    set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
-
-
 def _resolve_model_for_checkpoint(checkpoint_path: str) -> str:
     """Map the wrapper checkpoint argument onto a registered public model name."""
     import human_motion_isaacsim as hmi
@@ -70,35 +62,27 @@ def _resolve_model_for_checkpoint(checkpoint_path: str) -> str:
 
 
 def build_scene(checkpoint_path: str, headless: bool):
-    """Create the Isaac Sim world with ground plane, humanoid, and static objects.
-
-    Returns (simulation_app, world, articulation, body_rigid_view, tracker_assets).
-    """
-    from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
+    """Create the local Isaac Sim scene used by the wrapper script."""
     from human_motion_isaacsim.checkpoint import load_tracker_assets
+    from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
 
     ensure_protomotions_importable()
     tracker_assets = load_tracker_assets(checkpoint_path)
 
     from isaacsim import SimulationApp
-
-    simulation_app = SimulationApp({"headless": headless})
-
     from omni.isaac.core import World
-    from omni.isaac.core.utils.stage import add_reference_to_stage
     from omni.isaac.core.articulations import Articulation
     from omni.isaac.core.objects import GroundPlane
     from omni.isaac.core.prims import RigidPrimView
-    from human_motion_isaacsim.custom_scene import populate_scene
+    from omni.isaac.core.utils.stage import add_reference_to_stage
+    from scene_utils import GROUND_PLANE_PRIM_PATH, populate_scene
 
-    # Physics dt from checkpoint config
+    simulation_app = SimulationApp({"headless": headless})
+
     fps = getattr(tracker_assets.simulator_config.sim, "fps", 60)
     world = World(physics_dt=1.0 / fps, rendering_dt=1.0 / fps)
+    world.scene.add(GroundPlane(prim_path=GROUND_PLANE_PRIM_PATH, size=100.0))
 
-    # Ground plane
-    world.scene.add(GroundPlane(prim_path="/World/GroundPlane", size=100.0))
-
-    # Humanoid USD
     asset_root = tracker_assets.robot_config.asset.asset_root
     usd_file = tracker_assets.robot_config.asset.usd_asset_file_name
     humanoid_usd_path = str(Path(asset_root) / usd_file)
@@ -107,19 +91,15 @@ def build_scene(checkpoint_path: str, headless: bool):
         Articulation(prim_path="/World/Humanoid", name="humanoid")
     )
 
-    # Static objects
     populate_scene(world)
 
-    # Per-body rigid view — needed for per-body transforms/velocities.
-    # The USD hierarchy puts bodies under /World/Humanoid/bodies/<name>.
-    # Must be added to scene BEFORE world.reset() so it gets initialized.
     body_names = tracker_assets.robot_config.kinematic_info.body_names
     body_prim_paths = [f"/World/Humanoid/bodies/{name}" for name in body_names]
     body_rigid_view = RigidPrimView(
-        prim_paths_expr=body_prim_paths, name="humanoid_bodies"
+        prim_paths_expr=body_prim_paths,
+        name="humanoid_bodies",
     )
     world.scene.add(body_rigid_view)
-
     world.reset()
 
     return simulation_app, world, articulation, body_rigid_view, tracker_assets
@@ -150,10 +130,11 @@ def run_protomotions(
 ):
     """Run ProtoMotions control through the package-owned API."""
     import human_motion_isaacsim as hmi
+    from scene_utils import align_scene_to_humanoid_root
 
     articulation.body_rigid_view = body_rigid_view
     world.simulation_app = simulation_app
-    world.scene_alignment_callback = lambda simulator: _align_scene_to_humanoid_root(
+    world.scene_alignment_callback = lambda simulator: align_scene_to_humanoid_root(
         world,
         simulator,
     )
@@ -176,7 +157,8 @@ def run_protomotions(
 def main():
     args = parse_args()
     model = _resolve_model_for_checkpoint(args.checkpoint)
-    simulation_app, world, articulation, body_rigid_view, _tracker_assets = build_scene(
+
+    simulation_app, world, articulation, body_rigid_view, _ = build_scene(
         args.checkpoint, args.headless,
     )
 
@@ -194,12 +176,6 @@ def main():
             video_output=args.video_output if args.video_output else None,
             reference_markers=args.reference_markers,
         )
-        
-        # INSTALL:
-        # install with pip
-        # FUNCTIONS:
-        # .init
-        # .control
 
 
 if __name__ == "__main__":

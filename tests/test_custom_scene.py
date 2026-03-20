@@ -67,11 +67,20 @@ def _load_run_scene_module():
     return module
 
 
+def _load_scene_utils_module():
+    module_path = Path(__file__).resolve().parents[1] / "scripts" / "scene_utils.py"
+    spec = importlib.util.spec_from_file_location("test_scene_utils_module", module_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_populate_scene_adds_three_objects():
     """populate_scene should add box, cylinder, sphere to the world."""
-    from human_motion_isaacsim.custom_scene import SCENE_OBJECTS, populate_scene
+    scene_utils = _load_scene_utils_module()
 
-    assert len(SCENE_OBJECTS) == 3
+    assert len(scene_utils.SCENE_OBJECTS) == 3
 
     added = []
 
@@ -81,31 +90,27 @@ def test_populate_scene_adds_three_objects():
             def add(obj):
                 added.append(obj)
 
-    populate_scene(_FakeWorld())
+    scene_utils.populate_scene(_FakeWorld())
     assert len(added) == 3
 
 
 def test_scene_objects_have_expected_prim_paths():
-    from human_motion_isaacsim.custom_scene import SCENE_OBJECTS
+    scene_utils = _load_scene_utils_module()
 
-    paths = [obj["prim_path"] for obj in SCENE_OBJECTS]
+    paths = [obj["prim_path"] for obj in scene_utils.SCENE_OBJECTS]
     assert all(p.startswith("/World/custom_scene/") for p in paths)
 
 
 def test_scene_objects_are_static():
     """All scene objects should have fixed_base=True (static)."""
-    from human_motion_isaacsim.custom_scene import SCENE_OBJECTS
+    scene_utils = _load_scene_utils_module()
 
-    for obj in SCENE_OBJECTS:
+    for obj in scene_utils.SCENE_OBJECTS:
         assert obj.get("fixed_base", False) is True, f"{obj['prim_path']} is not static"
 
 
 def test_set_scene_origin_offsets_all_object_translations():
-    from human_motion_isaacsim.custom_scene import (
-        GROUND_PLANE_PRIM_PATH,
-        SCENE_OBJECTS,
-        set_scene_origin,
-    )
+    scene_utils = _load_scene_utils_module()
 
     class _FakePrim:
         def __init__(self):
@@ -131,8 +136,8 @@ def test_set_scene_origin_offsets_all_object_translations():
 
     class _FakeStage:
         def __init__(self):
-            self._prims = {obj["prim_path"]: _FakePrim() for obj in SCENE_OBJECTS}
-            self._prims[GROUND_PLANE_PRIM_PATH] = _FakePrim()
+            self._prims = {obj["prim_path"]: _FakePrim() for obj in scene_utils.SCENE_OBJECTS}
+            self._prims[scene_utils.GROUND_PLANE_PRIM_PATH] = _FakePrim()
 
         def GetPrimAtPath(self, prim_path):
             return self._prims[prim_path]
@@ -140,12 +145,12 @@ def test_set_scene_origin_offsets_all_object_translations():
     stage = _FakeStage()
     world = types.SimpleNamespace(stage=stage)
 
-    set_scene_origin(world, (10.0, 20.0, 0.0))
+    scene_utils.set_scene_origin(world, (10.0, 20.0, 0.0))
 
-    ground_plane = stage.GetPrimAtPath(GROUND_PLANE_PRIM_PATH)
+    ground_plane = stage.GetPrimAtPath(scene_utils.GROUND_PLANE_PRIM_PATH)
     assert ground_plane.translate == pytest.approx((10.0, 20.0, 0.0))
 
-    for obj in SCENE_OBJECTS:
+    for obj in scene_utils.SCENE_OBJECTS:
         prim = stage.GetPrimAtPath(obj["prim_path"])
         expected = tuple(a + b for a, b in zip(obj["position"], (10.0, 20.0, 0.0)))
         assert prim.translate == pytest.approx(expected)

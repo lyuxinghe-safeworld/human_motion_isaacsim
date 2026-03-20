@@ -35,15 +35,11 @@ SCENE_OBJECTS = [
 
 
 def populate_scene(world: Any) -> None:
-    """Add hardcoded static objects to the Isaac Sim world.
-
-    Uses omni.isaac.core object prims. Each object is a rigid body with a
-    collider and fixed_base=True (static — won't fall or move).
-    """
+    """Add hardcoded static objects to the Isaac Sim world."""
     import numpy as np
     from omni.isaac.core.objects import FixedCuboid, FixedCylinder, FixedSphere
 
-    _BUILDERS = {
+    builders = {
         "cube": lambda obj: FixedCuboid(
             prim_path=obj["prim_path"],
             size=obj["size"],
@@ -66,8 +62,7 @@ def populate_scene(world: Any) -> None:
     }
 
     for obj in SCENE_OBJECTS:
-        prim = _BUILDERS[obj["type"]](obj)
-        world.scene.add(prim)
+        world.scene.add(builders[obj["type"]](obj))
 
 
 def set_scene_origin(world: Any, origin: tuple[float, float, float]) -> None:
@@ -99,3 +94,9 @@ def set_scene_origin(world: Any, origin: tuple[float, float, float]) -> None:
         if not translate_attr.IsValid():
             raise RuntimeError(f"Scene prim is missing xformOp:translate: {obj['prim_path']}")
         translate_attr.Set(Gf.Vec3d(*position.tolist()))
+
+
+def align_scene_to_humanoid_root(world: Any, simulator: Any) -> None:
+    """Keep the authored local scene centered on the humanoid spawn/reset point."""
+    root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
+    set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Iterable, Any
 
+from human_motion_isaacsim.checkpoint import tracker_kinematic_layout
+
 
 EXPECTED_SMPL_BODY_NAMES = (
     "Pelvis",
@@ -123,18 +125,26 @@ def _as_tuple(names: Iterable[str]) -> tuple[str, ...]:
 def validate_humanoid_layout(
     body_names: Iterable[str],
     joint_names: Iterable[str],
+    *,
+    expected_body_names: Iterable[str] = EXPECTED_SMPL_BODY_NAMES,
+    expected_joint_names: Iterable[str] = EXPECTED_SMPL_JOINT_NAMES,
+    model_label: str = "the expected ProtoMotions SMPL layout",
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     body_names_tuple = _as_tuple(body_names)
     joint_names_tuple = _as_tuple(joint_names)
+    expected_body_names_tuple = _as_tuple(expected_body_names)
+    expected_joint_names_tuple = _as_tuple(expected_joint_names)
 
-    if body_names_tuple != EXPECTED_SMPL_BODY_NAMES:
+    if body_names_tuple != expected_body_names_tuple:
         raise StageBindingError(
-            "Bound humanoid body names do not match the expected ProtoMotions SMPL layout."
+            f"The selected model does not match the supplied articulation layout: "
+            f"articulation body names do not match {model_label}."
         )
 
-    if joint_names_tuple != EXPECTED_SMPL_JOINT_NAMES:
+    if joint_names_tuple != expected_joint_names_tuple:
         raise StageBindingError(
-            "Bound humanoid joint names do not match the expected ProtoMotions SMPL layout."
+            f"The selected model does not match the supplied articulation layout: "
+            f"articulation joint names do not match {model_label}."
         )
 
     return body_names_tuple, joint_names_tuple
@@ -145,11 +155,19 @@ def validate_articulation(
     *,
     tracker_assets: Any,
 ) -> BoundHumanoid:
-    # Temporary scaffold: the later task will replace this with metadata-driven
-    # validation from tracker_assets instead of the legacy SMPL layout check.
+    expected_body_names, expected_joint_names = tracker_kinematic_layout(tracker_assets)
+    checkpoint_path = getattr(tracker_assets, "checkpoint_path", None)
+    model_label = (
+        f"tracker asset metadata from {checkpoint_path}"
+        if checkpoint_path is not None
+        else "the selected model's tracker asset metadata"
+    )
     body_names, joint_names = validate_humanoid_layout(
         articulation.body_names,
         articulation.joint_names,
+        expected_body_names=expected_body_names,
+        expected_joint_names=expected_joint_names,
+        model_label=model_label,
     )
     return BoundHumanoid(
         prim_path="",

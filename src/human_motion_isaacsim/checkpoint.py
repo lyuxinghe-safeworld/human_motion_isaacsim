@@ -25,6 +25,18 @@ class TrackerAssets:
     agent_config: Any
 
 
+def tracker_kinematic_layout(tracker_assets: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    robot_config = getattr(tracker_assets, "robot_config", None)
+    kinematic_info = getattr(robot_config, "kinematic_info", None)
+    body_names = getattr(kinematic_info, "body_names", None)
+    joint_names = getattr(kinematic_info, "joint_names", None)
+
+    if body_names is None or joint_names is None:
+        raise ValueError("Tracker assets are missing robot_config.kinematic_info body/joint metadata.")
+
+    return tuple(body_names), tuple(joint_names)
+
+
 def _protomotions_root() -> Path:
     return resolve_protomotions_root()
 

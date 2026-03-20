@@ -105,18 +105,18 @@ def align_scene_to_humanoid_root(world: Any, simulator: Any) -> None:
 
 def build_scene(model: str, headless: bool):
     """Create the local Isaac Sim scene used by the wrapper script."""
-    from human_motion_isaacsim._registry import resolve_tracker_assets
-
-    tracker_assets = resolve_tracker_assets(model)
-
     from isaacsim import SimulationApp
+
+    simulation_app = SimulationApp({"headless": headless})
+
+    from human_motion_isaacsim._registry import resolve_tracker_assets
     from omni.isaac.core import World
     from omni.isaac.core.articulations import Articulation
     from omni.isaac.core.objects import GroundPlane
     from omni.isaac.core.prims import RigidPrimView
     from omni.isaac.core.utils.stage import add_reference_to_stage
 
-    simulation_app = SimulationApp({"headless": headless})
+    tracker_assets = resolve_tracker_assets(model)
 
     fps = getattr(tracker_assets.simulator_config.sim, "fps", 60)
     world = World(physics_dt=1.0 / fps, rendering_dt=1.0 / fps)

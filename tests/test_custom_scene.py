@@ -166,6 +166,130 @@ def test_set_scene_origin_offsets_all_object_translations():
         assert prim.translate == pytest.approx(expected)
 
 
+def test_build_scene_instantiates_simulation_app_before_omni_imports(monkeypatch, tmp_path):
+    scene_utils = _load_scene_utils_module()
+
+    tracker_assets = types.SimpleNamespace(
+        simulator_config=types.SimpleNamespace(sim=types.SimpleNamespace(fps=60)),
+        robot_config=types.SimpleNamespace(
+            asset=types.SimpleNamespace(
+                asset_root=str(tmp_path),
+                usd_asset_file_name="humanoid.usd",
+            ),
+            kinematic_info=types.SimpleNamespace(body_names=("Pelvis",)),
+        ),
+    )
+    simulation_app_created = {"value": False}
+    resolve_called = {"value": False}
+
+    class _FakeSimulationApp:
+        def __init__(self, _config):
+            simulation_app_created["value"] = True
+
+    class _FakeScene:
+        @staticmethod
+        def add(obj):
+            return obj
+
+    class _FakeWorld:
+        def __init__(self, **_kwargs):
+            self.scene = _FakeScene()
+
+        def reset(self):
+            return None
+
+    class _FakeArticulation:
+        def __init__(self, **_kwargs):
+            return None
+
+    class _FakeGroundPlane:
+        def __init__(self, **_kwargs):
+            return None
+
+    class _FakeRigidPrimView:
+        def __init__(self, **_kwargs):
+            return None
+
+    class _FakeFixedObject:
+        def __init__(self, **_kwargs):
+            return None
+
+    class _GuardedModule(types.ModuleType):
+        def __init__(self, name, exports):
+            super().__init__(name)
+            self._exports = exports
+            self.__path__ = []
+
+        def __getattr__(self, name):
+            if not simulation_app_created["value"]:
+                raise AssertionError(f"{name} imported before SimulationApp")
+            if name in self._exports:
+                return self._exports[name]
+            raise AttributeError(name)
+
+    omni_mod = types.ModuleType("omni")
+    isaac_mod = types.ModuleType("omni.isaac")
+    core_mod = _GuardedModule("omni.isaac.core", {"World": _FakeWorld})
+    articulations_mod = _GuardedModule(
+        "omni.isaac.core.articulations",
+        {"Articulation": _FakeArticulation},
+    )
+    objects_mod = _GuardedModule(
+        "omni.isaac.core.objects",
+        {
+            "GroundPlane": _FakeGroundPlane,
+            "FixedCuboid": _FakeFixedObject,
+            "FixedCylinder": _FakeFixedObject,
+            "FixedSphere": _FakeFixedObject,
+        },
+    )
+    prims_mod = _GuardedModule(
+        "omni.isaac.core.prims",
+        {"RigidPrimView": _FakeRigidPrimView},
+    )
+    utils_mod = types.ModuleType("omni.isaac.core.utils")
+    utils_mod.__path__ = []
+    stage_mod = _GuardedModule(
+        "omni.isaac.core.utils.stage",
+        {"add_reference_to_stage": lambda *args, **kwargs: None},
+    )
+    isaacsim_mod = types.ModuleType("isaacsim")
+    isaacsim_mod.SimulationApp = _FakeSimulationApp
+
+    omni_mod.isaac = isaac_mod
+    isaac_mod.core = core_mod
+    core_mod.articulations = articulations_mod
+    core_mod.objects = objects_mod
+    core_mod.prims = prims_mod
+    core_mod.utils = utils_mod
+    utils_mod.stage = stage_mod
+
+    monkeypatch.setitem(sys.modules, "isaacsim", isaacsim_mod)
+    monkeypatch.setitem(sys.modules, "omni", omni_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac", isaac_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac.core", core_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac.core.articulations", articulations_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac.core.objects", objects_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac.core.prims", prims_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac.core.utils", utils_mod)
+    monkeypatch.setitem(sys.modules, "omni.isaac.core.utils.stage", stage_mod)
+
+    def _resolve_tracker_assets(_model_name):
+        if not simulation_app_created["value"]:
+            raise AssertionError("resolve_tracker_assets called before SimulationApp")
+        resolve_called["value"] = True
+        return tracker_assets
+
+    fake_registry = types.ModuleType("human_motion_isaacsim._registry")
+    fake_registry.resolve_tracker_assets = _resolve_tracker_assets
+    monkeypatch.setitem(sys.modules, "human_motion_isaacsim._registry", fake_registry)
+
+    scene_utils.build_scene("smpl", headless=True)
+
+    assert simulation_app_created["value"] is True
+    assert resolve_called["value"] is True
+
+
 def test_run_scene_defaults_model_to_smpl(monkeypatch):
     args = _parse_run_scene_args(
         monkeypatch,

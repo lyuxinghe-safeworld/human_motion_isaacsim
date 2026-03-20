@@ -21,8 +21,9 @@ def init(
     del reference_markers
 
     PACKAGE_STATE.teardown()
+    tracker_assets = resolve_tracker_assets(model)
     PACKAGE_STATE.model_name = model
-    PACKAGE_STATE.tracker_assets = resolve_tracker_assets(model)
+    PACKAGE_STATE.tracker_assets = tracker_assets
     PACKAGE_STATE.world = world
     PACKAGE_STATE.articulation = articulation
 

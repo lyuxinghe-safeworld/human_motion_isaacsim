@@ -24,17 +24,25 @@ class PackageState:
     owned_helpers: list[Any] = field(default_factory=list)
 
     def teardown(self) -> None:
+        first_error: Exception | None = None
         try:
             for helper in self.owned_helpers:
                 if helper is self.simulation_app:
                     continue
-                _teardown_helper(helper)
+                try:
+                    _teardown_helper(helper)
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
         finally:
             self.owned_helpers.clear()
             self.model_name = None
             self.tracker_assets = None
             self.world = None
             self.articulation = None
+
+        if first_error is not None:
+            raise first_error
 
 
 PACKAGE_STATE = PackageState()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 from dataclasses import dataclass
@@ -39,6 +40,17 @@ def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None
     root_str = str(root)
     if root_str not in sys.path:
         sys.path.insert(0, root_str)
+
+    stale_modules = [
+        module_name
+        for module_name in list(sys.modules)
+        if module_name == "protomotions" or module_name.startswith("protomotions.")
+    ]
+    for module_name in stale_modules:
+        sys.modules.pop(module_name, None)
+
+    importlib.invalidate_caches()
+    importlib.import_module("protomotions")
 
     return root
 

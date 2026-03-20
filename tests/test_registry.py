@@ -1,5 +1,9 @@
 from types import SimpleNamespace
 
+import importlib
+import sys
+from pathlib import Path
+
 import pytest
 import torch
 
@@ -71,6 +75,49 @@ def test_resolve_tracker_assets_prefers_repo_local_assets(monkeypatch, tmp_path)
     assert assets.robot_config.asset.asset_root == str((protomotions_root / "protomotions" / "data" / "assets").resolve())
 
 
+def test_load_tracker_assets_explicit_protomotions_override_replaces_stale_imports(monkeypatch, tmp_path):
+    import human_motion_isaacsim.checkpoint as checkpoint_module
+
+    stale_root = tmp_path / "stale_proto"
+    override_root = tmp_path / "override_proto"
+    for root, label in ((stale_root, "stale"), (override_root, "override")):
+        package_dir = root / "protomotions"
+        package_dir.mkdir(parents=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (package_dir / "marker.py").write_text(f'ROOT = "{label}"\n', encoding="utf-8")
+
+    checkpoint = tmp_path / "last.ckpt"
+    checkpoint.write_bytes(b"checkpoint")
+    resolved = checkpoint.parent / "resolved_configs_inference.pt"
+    resolved.write_bytes(b"placeholder")
+
+    monkeypatch.syspath_prepend(str(stale_root))
+    importlib.invalidate_caches()
+    sys.modules.pop("protomotions", None)
+    sys.modules.pop("protomotions.marker", None)
+    importlib.import_module("protomotions.marker")
+
+    def fake_load(*args, **kwargs):
+        marker = importlib.import_module("protomotions.marker")
+        return {
+            "robot": SimpleNamespace(asset=SimpleNamespace(asset_root="protomotions/data/assets")),
+            "simulator": SimpleNamespace(_target_="sim.target"),
+            "terrain": SimpleNamespace(_target_="terrain.target"),
+            "scene_lib": SimpleNamespace(_target_="scene.target"),
+            "motion_lib": SimpleNamespace(_target_="motion.target"),
+            "env": SimpleNamespace(_target_=marker.ROOT),
+            "agent": SimpleNamespace(_target_="agent.target"),
+        }
+
+    monkeypatch.setattr(checkpoint_module.torch, "load", fake_load)
+
+    assets = checkpoint_module.load_tracker_assets(checkpoint, protomotions_root=override_root)
+
+    assert assets.env_config._target_ == "override"
+    assert assets.robot_config.asset.asset_root == str((override_root / "protomotions" / "data" / "assets").resolve())
+    assert "override_proto" in Path(sys.modules["protomotions"].__file__).as_posix()
+
+
 def test_package_state_teardown_clears_owned_references_without_closing_simulation_app():
     from human_motion_isaacsim._state import PackageState
 
@@ -106,6 +153,17 @@ def test_package_state_teardown_clears_state_when_helper_teardown_raises():
     from human_motion_isaacsim._state import PackageState
 
     simulation_app = SimpleNamespace(close=lambda: (_ for _ in ()).throw(AssertionError("should not close")))
+    call_order = []
+
+    def teardown_first():
+        call_order.append("first")
+
+    def teardown_boom():
+        call_order.append("boom")
+        raise RuntimeError("boom")
+
+    def teardown_last():
+        call_order.append("last")
 
     state = PackageState(
         model_name="smpl",
@@ -113,12 +171,17 @@ def test_package_state_teardown_clears_state_when_helper_teardown_raises():
         world=object(),
         articulation=object(),
         simulation_app=simulation_app,
-        owned_helpers=[SimpleNamespace(teardown=lambda: (_ for _ in ()).throw(RuntimeError("boom")))],
+        owned_helpers=[
+            SimpleNamespace(teardown=teardown_first),
+            SimpleNamespace(teardown=teardown_boom),
+            SimpleNamespace(teardown=teardown_last),
+        ],
     )
 
     with pytest.raises(RuntimeError, match="boom"):
         state.teardown()
 
+    assert call_order == ["first", "boom", "last"]
     assert state.model_name is None
     assert state.tracker_assets is None
     assert state.world is None

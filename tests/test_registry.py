@@ -66,9 +66,9 @@ def test_resolve_tracker_assets_prefers_repo_local_assets(monkeypatch, tmp_path)
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
 
-    import human_motion_isaacsim._registry as _registry
+    from human_motion_isaacsim.checkpoint import _resolve_tracker_assets
 
-    assets = _registry.resolve_tracker_assets("smpl", repo_root=repo_root)
+    assets = _resolve_tracker_assets("smpl", repo_root=repo_root)
 
     assert assets.checkpoint_path == local_checkpoint
     assert assets.resolved_config_path == local_checkpoint.parent / "resolved_configs_inference.pt"

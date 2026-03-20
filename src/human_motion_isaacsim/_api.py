@@ -5,10 +5,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from human_motion_isaacsim._registry import (
-    list_models as registry_list_models,
-    resolve_tracker_assets,
-)
+from human_motion_isaacsim._registry import list_models as registry_list_models
+from human_motion_isaacsim.checkpoint import _resolve_tracker_assets
 from human_motion_isaacsim._state import PACKAGE_STATE
 from human_motion_isaacsim.motion_file import load_motion_metadata
 from human_motion_isaacsim.result import MotionRunResult
@@ -260,7 +258,7 @@ def init(
     headless: bool = True,
     reference_markers: bool = False,
 ) -> None:
-    tracker_assets = resolve_tracker_assets(model)
+    tracker_assets = _resolve_tracker_assets(model)
     simulation_app = _resolve_simulation_app(world, articulation)
     body_rigid_view = _resolve_body_rigid_view(world, articulation)
     if body_rigid_view is None and getattr(tracker_assets, "robot_config", None) is not None:

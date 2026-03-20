@@ -120,3 +120,72 @@ def load_tracker_assets(
         env_config=configs["env"],
         agent_config=configs["agent"],
     )
+
+
+from human_motion_isaacsim._registry import _load_registry
+
+
+def _default_repo_root() -> Path:
+    """Return the root of this repository based on the location of this source file."""
+    return Path(__file__).resolve().parents[2]
+
+
+def _repo_checkpoint_path(model_name: str, repo_root: Path) -> Path:
+    """Build the path to a model checkpoint inside the local ProtoMotions vendor tree."""
+    return (
+        repo_root
+        / "third_party"
+        / "ProtoMotions"
+        / "data"
+        / "pretrained_models"
+        / "motion_tracker"
+        / model_name
+        / "last.ckpt"
+    )
+
+
+def _repo_protomotions_root(repo_root: Path) -> Path:
+    """Return the ProtoMotions package root within the given repository checkout."""
+    return repo_root / "third_party" / "ProtoMotions"
+
+
+def _cache_checkpoint_path(model_name: str) -> Path:
+    """Build the XDG-cache path where a downloaded model checkpoint is stored."""
+    cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return cache_home / "human_motion_isaacsim" / model_name / "last.ckpt"
+
+
+def _has_local_assets(checkpoint_path: Path) -> bool:
+    """Return True when both the checkpoint and its resolved-config sidecar exist on disk."""
+    return checkpoint_path.exists() and resolved_config_path_for_checkpoint(checkpoint_path).exists()
+
+
+def _resolve_tracker_assets(model_name: str, *, repo_root: str | Path | None = None) -> TrackerAssets:
+    """Locate and load tracker assets for a registered model name.
+
+    Searches the local repository vendor tree first, then the XDG cache
+    directory.  Raises ``FileNotFoundError`` if no local assets are found.
+    """
+    registry = _load_registry()
+    if model_name not in registry:
+        raise KeyError(f"Unknown model: {model_name}")
+
+    resolved_repo_root = Path(repo_root) if repo_root else _default_repo_root()
+    repo_checkpoint = _repo_checkpoint_path(model_name, resolved_repo_root)
+    if _has_local_assets(repo_checkpoint):
+        return load_tracker_assets(
+            repo_checkpoint,
+            protomotions_root=_repo_protomotions_root(resolved_repo_root),
+        )
+
+    cache_checkpoint = _cache_checkpoint_path(model_name)
+    if _has_local_assets(cache_checkpoint):
+        return load_tracker_assets(cache_checkpoint)
+
+    checkpoint_gcs = registry[model_name].get("checkpoint_gcs")
+    if checkpoint_gcs:
+        raise FileNotFoundError(
+            f"No local tracker assets found for {model_name}; remote fetch is not implemented for {checkpoint_gcs}"
+        )
+
+    raise FileNotFoundError(f"No tracker assets found for {model_name}")

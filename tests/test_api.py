@@ -21,7 +21,7 @@ def test_run_after_init_executes_tracking_loop(monkeypatch, tmp_path):
     from human_motion_isaacsim import _api
     from human_motion_isaacsim._state import PACKAGE_STATE
 
-    monkeypatch.setattr(_api, "resolve_tracker_assets", lambda model: object())
+    monkeypatch.setattr(_api, "_resolve_tracker_assets", lambda model: object())
     compiled = {}
     teardown_calls = []
 
@@ -119,7 +119,7 @@ def test_failed_init_preserves_pre_init_run_behavior(monkeypatch):
         raise FileNotFoundError("missing assets")
 
     PACKAGE_STATE.teardown()
-    monkeypatch.setattr(_api, "resolve_tracker_assets", fail_resolution)
+    monkeypatch.setattr(_api, "_resolve_tracker_assets", fail_resolution)
 
     with pytest.raises(FileNotFoundError, match="missing assets"):
         hmi.init("smpl", world=object(), articulation=object())
@@ -145,7 +145,7 @@ def test_failed_reinit_preserves_last_successful_state(monkeypatch):
         raise FileNotFoundError("missing replacement assets")
 
     PACKAGE_STATE.teardown()
-    monkeypatch.setattr(_api, "resolve_tracker_assets", resolve_assets)
+    monkeypatch.setattr(_api, "_resolve_tracker_assets", resolve_assets)
 
     hmi.init("smpl", world=original_world, articulation=original_articulation)
 
@@ -184,7 +184,7 @@ def test_init_clears_stale_simulation_app_when_new_binding_has_none(monkeypatch)
     from human_motion_isaacsim._state import PACKAGE_STATE
 
     PACKAGE_STATE.teardown()
-    monkeypatch.setattr(_api, "resolve_tracker_assets", lambda model: object())
+    monkeypatch.setattr(_api, "_resolve_tracker_assets", lambda model: object())
 
     first_world = SimpleNamespace(simulation_app=object())
     hmi.init("smpl", world=first_world, articulation=object())
@@ -208,7 +208,7 @@ def test_init_caches_created_body_view_for_reuse(monkeypatch):
     articulation = SimpleNamespace()
 
     PACKAGE_STATE.teardown()
-    monkeypatch.setattr(_api, "resolve_tracker_assets", lambda model: tracker_assets)
+    monkeypatch.setattr(_api, "_resolve_tracker_assets", lambda model: tracker_assets)
 
     def fake_build_body_rigid_view(world, articulation_arg, tracker_assets_arg):
         build_calls.append((world, articulation_arg, tracker_assets_arg))

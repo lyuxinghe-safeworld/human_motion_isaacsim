@@ -24,16 +24,17 @@ class PackageState:
     owned_helpers: list[Any] = field(default_factory=list)
 
     def teardown(self) -> None:
-        for helper in self.owned_helpers:
-            if helper is self.simulation_app:
-                continue
-            _teardown_helper(helper)
-
-        self.owned_helpers.clear()
-        self.model_name = None
-        self.tracker_assets = None
-        self.world = None
-        self.articulation = None
+        try:
+            for helper in self.owned_helpers:
+                if helper is self.simulation_app:
+                    continue
+                _teardown_helper(helper)
+        finally:
+            self.owned_helpers.clear()
+            self.model_name = None
+            self.tracker_assets = None
+            self.world = None
+            self.articulation = None
 
 
 PACKAGE_STATE = PackageState()

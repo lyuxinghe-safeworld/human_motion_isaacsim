@@ -51,6 +51,10 @@ def _repo_checkpoint_path(model_name: str, repo_root: Path) -> Path:
     )
 
 
+def _repo_protomotions_root(repo_root: Path) -> Path:
+    return repo_root / "third_party" / "ProtoMotions"
+
+
 def _cache_checkpoint_path(model_name: str) -> Path:
     cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
     return cache_home / "human_motion_isaacsim" / model_name / "last.ckpt"
@@ -65,9 +69,13 @@ def resolve_tracker_assets(model_name: str, *, repo_root: str | Path | None = No
     if model_name not in registry:
         raise KeyError(f"Unknown model: {model_name}")
 
-    repo_checkpoint = _repo_checkpoint_path(model_name, Path(repo_root) if repo_root else _default_repo_root())
+    resolved_repo_root = Path(repo_root) if repo_root else _default_repo_root()
+    repo_checkpoint = _repo_checkpoint_path(model_name, resolved_repo_root)
     if _has_local_assets(repo_checkpoint):
-        return load_tracker_assets(repo_checkpoint)
+        return load_tracker_assets(
+            repo_checkpoint,
+            protomotions_root=_repo_protomotions_root(resolved_repo_root),
+        )
 
     cache_checkpoint = _cache_checkpoint_path(model_name)
     if _has_local_assets(cache_checkpoint):

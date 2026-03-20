@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,14 +28,30 @@ def _protomotions_root() -> Path:
     return resolve_protomotions_root()
 
 
-def _normalize_robot_asset_root(robot_config: Any) -> None:
+def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None = None) -> Path:
+    if protomotions_root is None:
+        return ensure_protomotions_importable()
+
+    root = Path(protomotions_root).resolve()
+    if not (root / "protomotions" / "__init__.py").exists():
+        raise FileNotFoundError(f"ProtoMotions checkout not found at {root}")
+
+    root_str = str(root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+
+    return root
+
+
+def _normalize_robot_asset_root(robot_config: Any, *, protomotions_root: str | Path | None = None) -> None:
     asset = getattr(robot_config, "asset", None)
     if asset is None:
         return
 
     asset_root = getattr(asset, "asset_root", "")
     if asset_root and not os.path.isabs(asset_root):
-        asset.asset_root = str((_protomotions_root() / asset_root).resolve())
+        root = Path(protomotions_root).resolve() if protomotions_root is not None else _protomotions_root()
+        asset.asset_root = str((root / asset_root).resolve())
 
 
 def resolved_config_path_for_checkpoint(checkpoint_path: str | Path) -> Path:
@@ -42,7 +59,9 @@ def resolved_config_path_for_checkpoint(checkpoint_path: str | Path) -> Path:
     return checkpoint.parent / "resolved_configs_inference.pt"
 
 
-def load_tracker_assets(checkpoint_path: str | Path) -> TrackerAssets:
+def load_tracker_assets(
+    checkpoint_path: str | Path, *, protomotions_root: str | Path | None = None
+) -> TrackerAssets:
     checkpoint = Path(checkpoint_path).resolve()
     resolved = resolved_config_path_for_checkpoint(checkpoint)
     if not resolved.exists():
@@ -50,10 +69,10 @@ def load_tracker_assets(checkpoint_path: str | Path) -> TrackerAssets:
 
     # Torch unpickling imports ProtoMotions config classes, so the repo path must
     # be on sys.path before we touch resolved_configs_inference.pt.
-    ensure_protomotions_importable()
+    root = _ensure_tracker_protomotions_importable(protomotions_root)
     configs = torch.load(resolved, map_location="cpu", weights_only=False)
     robot_config = configs["robot"]
-    _normalize_robot_asset_root(robot_config)
+    _normalize_robot_asset_root(robot_config, protomotions_root=root)
 
     return TrackerAssets(
         checkpoint_path=checkpoint,

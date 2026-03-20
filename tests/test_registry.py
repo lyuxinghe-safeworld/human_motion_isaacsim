@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 
@@ -33,10 +34,9 @@ def test_list_models_reads_packaged_registry():
 
 def test_resolve_tracker_assets_prefers_repo_local_assets(monkeypatch, tmp_path):
     repo_root = tmp_path / "checkout"
+    protomotions_root = repo_root / "third_party" / "ProtoMotions"
     local_checkpoint = (
-        repo_root
-        / "third_party"
-        / "ProtoMotions"
+        protomotions_root
         / "data"
         / "pretrained_models"
         / "motion_tracker"
@@ -46,6 +46,8 @@ def test_resolve_tracker_assets_prefers_repo_local_assets(monkeypatch, tmp_path)
     local_checkpoint.parent.mkdir(parents=True)
     local_checkpoint.write_bytes(b"local checkpoint")
     _write_resolved_configs(local_checkpoint.parent, asset_root="protomotions/data/assets")
+    (protomotions_root / "protomotions").mkdir(parents=True)
+    (protomotions_root / "protomotions" / "__init__.py").write_text("", encoding="utf-8")
 
     cache_checkpoint = (
         tmp_path
@@ -66,6 +68,7 @@ def test_resolve_tracker_assets_prefers_repo_local_assets(monkeypatch, tmp_path)
 
     assert assets.checkpoint_path == local_checkpoint
     assert assets.resolved_config_path == local_checkpoint.parent / "resolved_configs_inference.pt"
+    assert assets.robot_config.asset.asset_root == str((protomotions_root / "protomotions" / "data" / "assets").resolve())
 
 
 def test_package_state_teardown_clears_owned_references_without_closing_simulation_app():
@@ -91,6 +94,31 @@ def test_package_state_teardown_clears_owned_references_without_closing_simulati
     state.teardown()
 
     assert helper.teardown_calls == 1
+    assert state.model_name is None
+    assert state.tracker_assets is None
+    assert state.world is None
+    assert state.articulation is None
+    assert state.simulation_app is simulation_app
+    assert state.owned_helpers == []
+
+
+def test_package_state_teardown_clears_state_when_helper_teardown_raises():
+    from human_motion_isaacsim._state import PackageState
+
+    simulation_app = SimpleNamespace(close=lambda: (_ for _ in ()).throw(AssertionError("should not close")))
+
+    state = PackageState(
+        model_name="smpl",
+        tracker_assets=object(),
+        world=object(),
+        articulation=object(),
+        simulation_app=simulation_app,
+        owned_helpers=[SimpleNamespace(teardown=lambda: (_ for _ in ()).throw(RuntimeError("boom")))],
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        state.teardown()
+
     assert state.model_name is None
     assert state.tracker_assets is None
     assert state.world is None

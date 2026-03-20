@@ -37,9 +37,14 @@ def _normalize_robot_asset_root(robot_config: Any) -> None:
         asset.asset_root = str((_protomotions_root() / asset_root).resolve())
 
 
+def resolved_config_path_for_checkpoint(checkpoint_path: str | Path) -> Path:
+    checkpoint = Path(checkpoint_path).resolve()
+    return checkpoint.parent / "resolved_configs_inference.pt"
+
+
 def load_tracker_assets(checkpoint_path: str | Path) -> TrackerAssets:
     checkpoint = Path(checkpoint_path).resolve()
-    resolved = checkpoint.parent / "resolved_configs_inference.pt"
+    resolved = resolved_config_path_for_checkpoint(checkpoint)
     if not resolved.exists():
         raise FileNotFoundError(f"Missing resolved_configs_inference.pt next to {checkpoint}")
 

@@ -1,0 +1,6 @@
+{
+  "smpl": {
+    "description": "SMPL body model",
+    "checkpoint_gcs": "gs://<bucket>/checkpoints/smpl/last.ckpt"
+  }
+}

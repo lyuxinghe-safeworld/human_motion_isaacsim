@@ -140,6 +140,23 @@ def validate_humanoid_layout(
     return body_names_tuple, joint_names_tuple
 
 
+def validate_articulation(
+    articulation: Any,
+    *,
+    tracker_assets: Any,
+) -> BoundHumanoid:
+    body_names, joint_names = validate_humanoid_layout(
+        articulation.body_names,
+        articulation.joint_names,
+    )
+    return BoundHumanoid(
+        prim_path="",
+        articulation=articulation,
+        body_names=body_names,
+        joint_names=joint_names,
+    )
+
+
 def bind_fixed_humanoid(
     prim_path: str,
     *,

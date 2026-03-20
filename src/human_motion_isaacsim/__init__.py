@@ -2,6 +2,9 @@ __all__ = [
     "MotionMetadata",
     "MotionRunResult",
     "MotionController",
+    "init",
+    "run",
+    "list_models",
     "load_motion_metadata",
     "viewport_capture",
 ]
@@ -20,6 +23,10 @@ def __getattr__(name: str):
         from human_motion_isaacsim.motion_runner import MotionController
 
         return MotionController
+    if name in {"init", "run", "list_models"}:
+        from human_motion_isaacsim import _api
+
+        return getattr(_api, name)
     if name == "load_motion_metadata":
         from human_motion_isaacsim.motion_file import load_motion_metadata
 

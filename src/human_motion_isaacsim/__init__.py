@@ -1,3 +1,5 @@
+"""Package public API surface."""
+
 __all__ = [
     "MotionMetadata",
     "MotionRunResult",

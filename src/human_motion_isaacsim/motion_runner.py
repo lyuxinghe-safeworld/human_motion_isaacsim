@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -8,6 +9,18 @@ from human_motion_isaacsim.binding import bind_fixed_humanoid
 from human_motion_isaacsim.checkpoint import load_tracker_assets
 from human_motion_isaacsim.motion_file import load_motion_metadata
 from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
+
+
+def _bind_humanoid_supports_tracker_assets(bind_humanoid: Callable[..., Any]) -> bool:
+    try:
+        parameters = inspect.signature(bind_humanoid).parameters.values()
+    except (TypeError, ValueError):
+        return True
+
+    return any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD or parameter.name == "tracker_assets"
+        for parameter in parameters
+    )
 
 
 class MotionController:
@@ -26,11 +39,17 @@ class MotionController:
         self.checkpoint_path = Path(checkpoint_path)
         self.lookup_articulation = lookup_articulation
         self.tracker_assets = load_assets(self.checkpoint_path)
-        self.bound_humanoid = bind_humanoid(
-            humanoid_prim_path,
-            lookup_articulation=lookup_articulation,
-            tracker_assets=self.tracker_assets,
-        )
+        if _bind_humanoid_supports_tracker_assets(bind_humanoid):
+            self.bound_humanoid = bind_humanoid(
+                humanoid_prim_path,
+                lookup_articulation=lookup_articulation,
+                tracker_assets=self.tracker_assets,
+            )
+        else:
+            self.bound_humanoid = bind_humanoid(
+                humanoid_prim_path,
+                lookup_articulation=lookup_articulation,
+            )
         self._motion_runner = motion_runner
         self._restore_rest_pose = restore_rest_pose
         self._busy = False

@@ -179,3 +179,22 @@ def test_bind_fixed_humanoid_uses_tracker_layout_metadata():
     assert bound.prim_path == "/World/Humanoid"
     assert bound.body_names == ("Pelvis", "Spine", "Tail")
     assert bound.joint_names == ("Pelvis_tx", "Pelvis_ty", "Pelvis_tz")
+
+
+def test_validate_articulation_rewraps_tracker_metadata_shape_errors():
+    import human_motion_isaacsim.binding as binding
+
+    articulation = SimpleNamespace(
+        body_names=("Pelvis", "Spine", "Tail"),
+        joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
+    )
+    malformed_tracker_assets = SimpleNamespace(robot_config=SimpleNamespace())
+
+    with pytest.raises(
+        binding.StageBindingError,
+        match="tracker metadata|binding|robot_config\\.kinematic_info",
+    ):
+        binding.validate_articulation(
+            articulation,
+            tracker_assets=malformed_tracker_assets,
+        )

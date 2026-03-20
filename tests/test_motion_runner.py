@@ -160,6 +160,25 @@ def test_controller_initialization_binds_humanoid_and_checkpoint(tmp_path):
     ]
 
 
+def test_controller_initialization_supports_legacy_custom_binder_signature(tmp_path):
+    from human_motion_isaacsim.motion_runner import MotionController
+
+    checkpoint = tmp_path / "last.ckpt"
+    checkpoint.write_bytes(b"checkpoint")
+
+    expected_bound_humanoid = object()
+
+    controller = MotionController(
+        humanoid_prim_path="/World/Humanoid",
+        checkpoint_path=checkpoint,
+        lookup_articulation=lambda _prim_path: object(),
+        bind_humanoid=lambda prim_path, *, lookup_articulation: expected_bound_humanoid,
+        load_assets=lambda path: object(),
+    )
+
+    assert controller.bound_humanoid is expected_bound_humanoid
+
+
 def test_controller_rejects_overlapping_run_requests(tmp_path):
     from human_motion_isaacsim.motion_runner import MotionController
 

@@ -25,10 +25,10 @@ def _as_tuple(names: Iterable[str]) -> tuple[str, ...]:
 def _tracker_layout_for_binding(tracker_assets: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
     try:
         return tracker_kinematic_layout(tracker_assets)
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         raise StageBindingError(
             "Cannot validate the supplied articulation for binding because the selected model "
-            "is missing tracker metadata at robot_config.kinematic_info body/joint names."
+            "has missing or malformed tracker metadata at robot_config.kinematic_info body/joint names."
         ) from exc
 
 

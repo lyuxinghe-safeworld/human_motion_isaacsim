@@ -198,3 +198,29 @@ def test_validate_articulation_rewraps_tracker_metadata_shape_errors():
             articulation,
             tracker_assets=malformed_tracker_assets,
         )
+
+
+def test_validate_articulation_rewraps_non_iterable_tracker_metadata():
+    import human_motion_isaacsim.binding as binding
+
+    articulation = SimpleNamespace(
+        body_names=("Pelvis", "Spine", "Tail"),
+        joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
+    )
+    malformed_tracker_assets = SimpleNamespace(
+        robot_config=SimpleNamespace(
+            kinematic_info=SimpleNamespace(
+                body_names=123,
+                joint_names=("Pelvis_tx", "Pelvis_ty", "Pelvis_tz"),
+            )
+        )
+    )
+
+    with pytest.raises(
+        binding.StageBindingError,
+        match="tracker metadata|binding|robot_config\\.kinematic_info",
+    ):
+        binding.validate_articulation(
+            articulation,
+            tracker_assets=malformed_tracker_assets,
+        )

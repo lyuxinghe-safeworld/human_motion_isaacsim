@@ -4,5 +4,6 @@ __pycache__/
 env/.venv/
 docs/
 tests/
+build/
 output/
 *.egg-info/

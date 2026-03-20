@@ -41,6 +41,14 @@ def _protomotions_root() -> Path:
     return resolve_protomotions_root()
 
 
+def _loaded_protomotions_root() -> Path | None:
+    module = sys.modules.get("protomotions")
+    module_file = getattr(module, "__file__", None) if module is not None else None
+    if not module_file:
+        return None
+    return Path(module_file).resolve().parent.parent
+
+
 def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None = None) -> Path:
     if protomotions_root is None:
         return ensure_protomotions_importable()
@@ -48,6 +56,9 @@ def _ensure_tracker_protomotions_importable(protomotions_root: str | Path | None
     root = Path(protomotions_root).resolve()
     if not (root / "protomotions" / "__init__.py").exists():
         raise FileNotFoundError(f"ProtoMotions checkout not found at {root}")
+
+    if _loaded_protomotions_root() == root:
+        return root
 
     root_str = str(root)
     sys.path[:] = [path for path in sys.path if path != root_str]

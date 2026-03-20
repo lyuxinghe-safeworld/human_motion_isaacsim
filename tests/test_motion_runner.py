@@ -378,6 +378,76 @@ def test_frame_path_sequence_is_zero_padded(tmp_path):
     assert frame_path_for_step(tmp_path, 7).name == "000007.png"
 
 
+def test_capture_active_viewport_uses_active_kit_app_when_simulation_app_missing(monkeypatch):
+    from human_motion_isaacsim import viewport_capture
+
+    calls = {"waits": 0}
+
+    class _FakeHelper:
+        async def wait_for_result(self):
+            calls["captured"] = True
+
+    class _FakeViewportUtility:
+        @staticmethod
+        def get_active_viewport():
+            return "viewport"
+
+        @staticmethod
+        def capture_viewport_to_file(viewport, file_path):
+            calls["viewport"] = viewport
+            calls["file_path"] = file_path
+            return _FakeHelper()
+
+    class _FakeApp:
+        def run_coroutine(self, coroutine):
+            import asyncio
+
+            return asyncio.run(coroutine)
+
+        async def next_update_async(self):
+            calls["updates"] = calls.get("updates", 0) + 1
+
+    class _FakeRendererCapture:
+        @staticmethod
+        def acquire_renderer_capture_interface():
+            return SimpleNamespace(wait_async_capture=lambda: calls.__setitem__("waits", calls["waits"] + 1))
+
+    fake_app = _FakeApp()
+
+    def fake_import_module(name):
+        if name == "omni.kit.viewport.utility":
+            return _FakeViewportUtility
+        if name == "omni.kit.app":
+            return SimpleNamespace(get_app=lambda: fake_app)
+        if name == "omni.renderer_capture":
+            return _FakeRendererCapture
+        raise AssertionError(f"Unexpected module import: {name}")
+
+    monkeypatch.setattr(viewport_capture.importlib, "import_module", fake_import_module)
+
+    viewport_capture.capture_active_viewport_to_file("frame.png", flush_updates=2)
+
+    assert calls["viewport"] == "viewport"
+    assert calls["file_path"] == "frame.png"
+    assert calls["captured"] is True
+    assert calls["waits"] == 2
+    assert calls["updates"] == 2
+
+
+def test_simulator_adapter_close_does_not_close_consumer_app():
+    from human_motion_isaacsim.simulator_adapter import SimulatorAdapter
+
+    adapter = SimulatorAdapter.__new__(SimulatorAdapter)
+    adapter._simulation_running = True
+    adapter._simulation_app = SimpleNamespace(
+        close=lambda: (_ for _ in ()).throw(AssertionError("should not close"))
+    )
+
+    adapter.close()
+
+    assert adapter._simulation_running is False
+
+
 def test_run_standalone_motion_uses_protomotions_viewport_capture(tmp_path, monkeypatch):
     from human_motion_isaacsim.motion_file import MotionMetadata
     from human_motion_isaacsim.motion_runner import MotionRunner

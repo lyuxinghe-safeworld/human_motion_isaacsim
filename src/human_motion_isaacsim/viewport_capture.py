@@ -10,15 +10,27 @@ def frame_path_for_step(frames_dir: str | Path, step: int) -> Path:
     return Path(frames_dir) / f"{step:06d}.png"
 
 
+def run_coroutine(coroutine, *, simulation_app=None):
+    if simulation_app is not None:
+        runner = getattr(simulation_app, "run_coroutine", None)
+        if callable(runner):
+            return runner(coroutine)
+
+    kit_app = importlib.import_module("omni.kit.app")
+    app = kit_app.get_app()
+    runner = getattr(app, "run_coroutine", None)
+    if callable(runner):
+        return runner(coroutine)
+
+    raise RuntimeError("No active Kit application is available to run viewport coroutines")
+
+
 def capture_active_viewport_to_file(
     file_path: str | Path,
     *,
-    simulation_app,
+    simulation_app=None,
     flush_updates: int = 3,
 ) -> None:
-    if simulation_app is None:
-        raise ValueError("simulation_app is required for viewport capture")
-
     viewport_utility = importlib.import_module("omni.kit.viewport.utility")
     kit_app = importlib.import_module("omni.kit.app")
     renderer_capture = importlib.import_module("omni.renderer_capture")
@@ -36,7 +48,7 @@ def capture_active_viewport_to_file(
             capture_iface.wait_async_capture()
             await app.next_update_async()
 
-    simulation_app.run_coroutine(_capture())
+    run_coroutine(_capture(), simulation_app=simulation_app)
 
 
 def compile_video(frame_paths: list[Path], video_path: str | Path, fps: int = 30) -> None:

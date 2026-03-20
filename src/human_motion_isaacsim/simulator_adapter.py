@@ -94,9 +94,8 @@ class SimulatorAdapter(Simulator):
         )
 
     def close(self) -> None:
-        """Close the simulator and the Isaac Sim application."""
+        """Close simulator-owned resources without taking down the consumer app."""
         self._simulation_running = False
-        self._simulation_app.close()
 
     # ------------------------------------------------------------------
     # Group 2: Environment Setup
@@ -622,9 +621,11 @@ class SimulatorAdapter(Simulator):
         if not self.headless or getattr(self, "_headless_capture_ready", False):
             return
 
+        from human_motion_isaacsim.viewport_capture import run_coroutine
+
         camera = self._ensure_headless_capture_camera()
         for _ in range(3):
-            self._simulation_app.run_coroutine(self._world.render_async())
+            run_coroutine(self._world.render_async(), simulation_app=self._simulation_app)
             rgba = camera.get_rgba()
             if rgba is not None and getattr(rgba, "size", 0) > 0:
                 self._headless_capture_ready = True

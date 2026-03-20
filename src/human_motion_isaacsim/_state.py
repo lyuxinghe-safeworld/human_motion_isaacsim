@@ -20,6 +20,9 @@ class PackageState:
     tracker_assets: TrackerAssets | None = None
     world: Any | None = None
     articulation: Any | None = None
+    body_rigid_view: Any | None = None
+    headless: bool = True
+    reference_markers: bool = False
     simulation_app: Any | None = None
     owned_helpers: list[Any] = field(default_factory=list)
 
@@ -40,6 +43,9 @@ class PackageState:
             self.tracker_assets = None
             self.world = None
             self.articulation = None
+            self.body_rigid_view = None
+            self.headless = True
+            self.reference_markers = False
 
         if first_error is not None:
             raise first_error

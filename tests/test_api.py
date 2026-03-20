@@ -1,6 +1,12 @@
 import pytest
 
 
+def test_init_is_exported():
+    import human_motion_isaacsim as hmi
+
+    assert callable(hmi.init)
+
+
 def test_run_requires_init():
     import human_motion_isaacsim as hmi
 
@@ -8,7 +14,7 @@ def test_run_requires_init():
         hmi.run("walk.motion")
 
 
-def test_list_models_reads_packaged_registry():
+def test_list_models_returns_smpl_first_model():
     import human_motion_isaacsim as hmi
 
     models = hmi.list_models()

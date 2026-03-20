@@ -145,6 +145,8 @@ def validate_articulation(
     *,
     tracker_assets: Any,
 ) -> BoundHumanoid:
+    # Temporary scaffold: the later task will replace this with metadata-driven
+    # validation from tracker_assets instead of the legacy SMPL layout check.
     body_names, joint_names = validate_humanoid_layout(
         articulation.body_names,
         articulation.joint_names,

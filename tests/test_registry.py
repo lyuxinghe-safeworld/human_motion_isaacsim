@@ -14,6 +14,18 @@ def test_resolve_tracker_assets_prefers_repo_local_assets(monkeypatch, tmp_path)
     local_checkpoint.write_bytes(b"local checkpoint")
     (local_checkpoint.parent / "resolved_configs_inference.pt").write_bytes(b"local configs")
 
+    cache_checkpoint = (
+        tmp_path
+        / "home"
+        / ".cache"
+        / "human_motion_isaacsim"
+        / "smpl"
+        / "last.ckpt"
+    )
+    cache_checkpoint.parent.mkdir(parents=True)
+    cache_checkpoint.write_bytes(b"cached checkpoint")
+    (cache_checkpoint.parent / "resolved_configs_inference.pt").write_bytes(b"cached configs")
+
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
 

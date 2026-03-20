@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, Any
 
 
-# TODO(task 5): replace these legacy SMPL constants with layout metadata
-# from the selected tracker assets.
 EXPECTED_SMPL_BODY_NAMES = (
     "Pelvis",
     "L_Hip",

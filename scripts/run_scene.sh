@@ -7,8 +7,8 @@ Usage: scripts/run_scene.sh --motion-file PATH [options]
 
 Options:
   --motion-file PATH          Path to the .motion file to render. Required.
+  --model NAME                Registered human model name. Default: smpl.
   --headless true|false       Render headless. Default: true.
-  --checkpoint PATH           Tracker checkpoint path.
   --reference-markers true|false
                               Render reference markers. Default: true.
   --video-output PATH         Output MP4 path. Default: output/<motion-stem>.mp4
@@ -36,8 +36,8 @@ repo_root="$(cd -- "$script_dir/.." && pwd -P)"
 python_bin="$repo_root/env/.venv/bin/python"
 
 motion_file=""
+model="smpl"
 headless="true"
-checkpoint="$repo_root/third_party/ProtoMotions/data/pretrained_models/motion_tracker/smpl/last.ckpt"
 reference_markers="true"
 video_output=""
 display=":1"
@@ -48,12 +48,12 @@ while [[ $# -gt 0 ]]; do
       motion_file="${2:-}"
       shift 2
       ;;
-    --headless)
-      headless="$(normalize_bool "${2:-}")"
+    --model)
+      model="${2:-}"
       shift 2
       ;;
-    --checkpoint)
-      checkpoint="${2:-}"
+    --headless)
+      headless="$(normalize_bool "${2:-}")"
       shift 2
       ;;
     --reference-markers)
@@ -102,11 +102,6 @@ if [[ ! -f "$motion_file" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$checkpoint" ]]; then
-  echo "Checkpoint not found: $checkpoint" >&2
-  exit 1
-fi
-
 mkdir -p -- "$(dirname -- "$video_output")"
 
 export OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}"
@@ -123,7 +118,7 @@ export MASTER_PORT="29500"
 cmd=(
   "$python_bin"
   "$repo_root/scripts/run_scene.py"
-  --checkpoint "$checkpoint"
+  --model "$model"
   --motion-file "$motion_file"
   --video-output "$video_output"
 )

@@ -52,6 +52,12 @@ export PROTOMOTIONS_ROOT=/path/to/ProtoMotions
 
 Use `scripts/run_scene.sh` for normal motion renders. It exports the required Isaac Sim runtime variables for you, defaults to headless mode, and forwards into `scripts/run_scene.py`.
 
+The public contract is:
+
+- the package owns model lookup, checkpoint resolution, and the tracking loop
+- the local scripts own scene construction and `SimulationApp` lifecycle
+- users pass `--model`, not checkpoint paths
+
 Headless by default:
 
 ```bash
@@ -70,7 +76,7 @@ scripts/run_scene.sh \
 
 Useful overrides:
 
-- `--checkpoint /path/to/last.ckpt`
+- `--model smpl`
 - `--video-output /path/to/output.mp4`
 - `--reference-markers false`
 
@@ -172,6 +178,7 @@ Expected outputs:
 ## Notes
 
 - `scripts/run_scene.sh` is the preferred user-facing entrypoint; `scripts/run_scene.py` remains the underlying Python runtime entrypoint.
+- `scripts/run_scene.sh` no longer exposes checkpoint paths; only lower-level smoke scripts still take explicit checkpoints.
 - During motion execution, the runner uses the same active-viewport capture call used by the ProtoMotions Isaac Lab path: `simulator._write_viewport_to_file(...)`. That keeps camera behavior aligned with `/home/lyuxinghe/code/hymotion_isaaclab`.
 - In monitor mode, the smoke runner uses the normal Isaac Sim GUI kit on `DISPLAY=:1`, which matches the `hymotion_isaaclab` monitor workflow.
 - The standalone smoke runner owns the stepping loop for the duration of the motion. The future stage-bound controller should reuse the same policy/capture pieces without taking over an externally managed world lifecycle.

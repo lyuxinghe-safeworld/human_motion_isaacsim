@@ -24,7 +24,7 @@ Start with `env/README.md` for:
 
 ## Run the custom scene
 
-`scripts/run_scene.sh` is the preferred entrypoint for rendering a motion file to video. It sets the required env vars, defaults to headless mode, and then calls `scripts/run_scene.py` underneath.
+`scripts/run_scene.sh` is the preferred entrypoint for rendering a motion file to video. The package resolves checkpoints from the selected `--model`, while the local scripts still own scene construction and Isaac Sim app lifecycle.
 
 Prerequisites:
 
@@ -50,12 +50,12 @@ scripts/run_scene.sh \
   --display :1
 ```
 
-Override the checkpoint, output path, or marker rendering:
+Override the model, output path, or marker rendering:
 
 ```bash
 scripts/run_scene.sh \
+  --model smpl \
   --motion-file assets/a_person_is_reaching_out_his_left_hand_and_walking.motion \
-  --checkpoint /home/lyuxinghe/code/human_motion_isaacsim/third_party/ProtoMotions/data/pretrained_models/motion_tracker/smpl/last.ckpt \
   --video-output /home/lyuxinghe/code/human_motion_isaacsim/output/custom_scene.mp4 \
   --reference-markers false
 ```
@@ -67,12 +67,19 @@ Outputs:
 - extracted frames are written to `<video-output without .mp4>/frames`
 - in headless video runs, the red reference markers are rendered into the saved frames so you can compare the tracked body against the input motion
 - pass `--reference-markers false` when you want a clean render without the red target spheres
+- users do not pass checkpoint paths to the wrapper; the package resolves tracker assets from `--model`
+
+## Package boundary
+
+- `src/human_motion_isaacsim/` owns model lookup, checkpoint resolution, and the tracking loop
+- `scripts/` owns local scene construction and `SimulationApp` lifecycle
+- local wrapper runs and installed package consumers use the same `hmi.init(...)` / `hmi.run(...)` control path
 
 ## Known issues
 
 ### Humanoid teleports on episode reset
 
-ProtoMotions calls `env.reset()` whenever an episode boundary is reached (the `dones` tensor has nonzero entries). The reset writes a new root pose via `SimulatorAdapter._set_simulator_env_state()`, which teleports the humanoid to a different world-space position and orientation. In `scripts/run_scene.py` the custom-scene path compensates by calling `_align_scene_to_humanoid_root()` after every reset to reposition the ground plane and static objects, but the standalone smoke path in `MotionRunner.run_standalone_motion()` does not — if a reset fires mid-clip, the humanoid will appear to jump to a new location while the camera follows but the scene stays behind.
+ProtoMotions calls `env.reset()` whenever an episode boundary is reached (the `dones` tensor has nonzero entries). The reset writes a new root pose via `SimulatorAdapter._set_simulator_env_state()`, which teleports the humanoid to a different world-space position and orientation. The local custom-scene wrapper compensates through a scene callback in `scripts/scene_utils.py`, but the standalone smoke path in `MotionRunner.run_standalone_motion()` does not — if a reset fires mid-clip, the humanoid will appear to jump to a new location while the camera follows but the scene stays behind.
 
 Practically this means:
 

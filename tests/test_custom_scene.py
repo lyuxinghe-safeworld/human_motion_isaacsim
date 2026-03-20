@@ -76,6 +76,16 @@ def _load_scene_utils_module():
     return module
 
 
+def _parse_run_scene_args(monkeypatch, *args):
+    run_scene = _load_run_scene_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_scene.py", *args],
+    )
+    return run_scene.parse_args()
+
+
 def test_populate_scene_adds_three_objects():
     """populate_scene should add box, cylinder, sphere to the world."""
     scene_utils = _load_scene_utils_module()
@@ -156,26 +166,22 @@ def test_set_scene_origin_offsets_all_object_translations():
         assert prim.translate == pytest.approx(expected)
 
 
-def test_run_scene_checkpoint_must_match_registered_model(monkeypatch, tmp_path):
-    run_scene = _load_run_scene_module()
-
-    registered_checkpoint = tmp_path / "registered" / "last.ckpt"
-    registered_checkpoint.parent.mkdir(parents=True)
-    registered_checkpoint.write_bytes(b"checkpoint")
-
-    custom_checkpoint = tmp_path / "custom" / "last.ckpt"
-    custom_checkpoint.parent.mkdir(parents=True)
-    custom_checkpoint.write_bytes(b"checkpoint")
-
-    import human_motion_isaacsim as hmi
-    import human_motion_isaacsim._registry as registry
-
-    monkeypatch.setattr(hmi, "list_models", lambda: [{"name": "smpl"}])
-    monkeypatch.setattr(
-        registry,
-        "resolve_tracker_assets",
-        lambda model_name: types.SimpleNamespace(checkpoint_path=registered_checkpoint),
+def test_run_scene_defaults_model_to_smpl(monkeypatch):
+    args = _parse_run_scene_args(
+        monkeypatch,
+        "--motion-file",
+        "walk.motion",
     )
 
-    with pytest.raises(ValueError, match="does not match any registered model"):
-        run_scene._resolve_model_for_checkpoint(str(custom_checkpoint))
+    assert args.model == "smpl"
+
+
+def test_run_scene_rejects_checkpoint_argument(monkeypatch):
+    with pytest.raises(SystemExit):
+        _parse_run_scene_args(
+            monkeypatch,
+            "--motion-file",
+            "walk.motion",
+            "--checkpoint",
+            "last.ckpt",
+        )

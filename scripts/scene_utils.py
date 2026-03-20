@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 SCENE_ROOT_PRIM_PATH = "/World/custom_scene"
@@ -100,3 +101,44 @@ def align_scene_to_humanoid_root(world: Any, simulator: Any) -> None:
     """Keep the authored local scene centered on the humanoid spawn/reset point."""
     root_pos = simulator._get_simulator_root_state().root_pos[0].detach().cpu().numpy()
     set_scene_origin(world, (float(root_pos[0]), float(root_pos[1]), 0.0))
+
+
+def build_scene(model: str, headless: bool):
+    """Create the local Isaac Sim scene used by the wrapper script."""
+    from human_motion_isaacsim._registry import resolve_tracker_assets
+
+    tracker_assets = resolve_tracker_assets(model)
+
+    from isaacsim import SimulationApp
+    from omni.isaac.core import World
+    from omni.isaac.core.articulations import Articulation
+    from omni.isaac.core.objects import GroundPlane
+    from omni.isaac.core.prims import RigidPrimView
+    from omni.isaac.core.utils.stage import add_reference_to_stage
+
+    simulation_app = SimulationApp({"headless": headless})
+
+    fps = getattr(tracker_assets.simulator_config.sim, "fps", 60)
+    world = World(physics_dt=1.0 / fps, rendering_dt=1.0 / fps)
+    world.scene.add(GroundPlane(prim_path=GROUND_PLANE_PRIM_PATH, size=100.0))
+
+    asset_root = tracker_assets.robot_config.asset.asset_root
+    usd_file = tracker_assets.robot_config.asset.usd_asset_file_name
+    humanoid_usd_path = str(Path(asset_root) / usd_file)
+    add_reference_to_stage(humanoid_usd_path, "/World/Humanoid")
+    articulation = world.scene.add(
+        Articulation(prim_path="/World/Humanoid", name="humanoid")
+    )
+
+    populate_scene(world)
+
+    body_names = tracker_assets.robot_config.kinematic_info.body_names
+    body_prim_paths = [f"/World/Humanoid/bodies/{name}" for name in body_names]
+    body_rigid_view = RigidPrimView(
+        prim_paths_expr=body_prim_paths,
+        name="humanoid_bodies",
+    )
+    world.scene.add(body_rigid_view)
+    world.reset()
+
+    return simulation_app, world, articulation, body_rigid_view

@@ -6,7 +6,7 @@ usage() {
 Usage: scripts/run_scene.sh --motion-file PATH [options]
 
 Options:
-  --motion-file PATH          Path to the .motion file to render. Required.
+  --motion-file PATH          Path to a .motion file to render. Repeat to build a sequence.
   --model NAME                Registered human model name. Default: smpl.
   --headless true|false       Render headless. Default: true.
   --reference-markers true|false
@@ -35,7 +35,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "$script_dir/.." && pwd -P)"
 python_bin="$repo_root/env/.venv/bin/python"
 
-motion_file=""
+motion_files=()
 model="smpl"
 headless="true"
 reference_markers="true"
@@ -45,7 +45,7 @@ display=":1"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --motion-file)
-      motion_file="${2:-}"
+      motion_files+=("${2:-}")
       shift 2
       ;;
     --model)
@@ -80,14 +80,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$motion_file" ]]; then
-  echo "--motion-file is required." >&2
+if [[ "${#motion_files[@]}" -eq 0 ]]; then
+  echo "At least one --motion-file is required." >&2
   usage >&2
   exit 1
 fi
 
 if [[ -z "$video_output" ]]; then
-  motion_name="$(basename -- "${motion_file%.*}")"
+  motion_name="$(basename -- "${motion_files[0]%.*}")"
   video_output="$repo_root/output/${motion_name}.mp4"
 fi
 
@@ -97,10 +97,12 @@ if [[ ! -x "$python_bin" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$motion_file" ]]; then
-  echo "Motion file not found: $motion_file" >&2
-  exit 1
-fi
+for motion_file in "${motion_files[@]}"; do
+  if [[ ! -f "$motion_file" ]]; then
+    echo "Motion file not found: $motion_file" >&2
+    exit 1
+  fi
+done
 
 mkdir -p -- "$(dirname -- "$video_output")"
 
@@ -119,9 +121,13 @@ cmd=(
   "$python_bin"
   "$repo_root/scripts/run_scene.py"
   --model "$model"
-  --motion-file "$motion_file"
-  --video-output "$video_output"
 )
+
+for motion_file in "${motion_files[@]}"; do
+  cmd+=(--motion-file "$motion_file")
+done
+
+cmd+=(--video-output "$video_output")
 
 if [[ "$headless" == "true" ]]; then
   cmd+=(--headless)

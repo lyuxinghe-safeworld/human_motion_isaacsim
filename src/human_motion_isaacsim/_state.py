@@ -27,6 +27,7 @@ class PackageState:
     headless: bool = True
     reference_markers: bool = False
     simulation_app: Any | None = None
+    carried_root_position: tuple[float, float, float] | None = None
     owned_helpers: list[Any] = field(default_factory=list)
 
     def teardown(self) -> None:
@@ -50,6 +51,7 @@ class PackageState:
             self.body_rigid_view = None
             self.headless = True
             self.reference_markers = False
+            self.carried_root_position = None
 
         if first_error is not None:
             raise first_error

@@ -24,8 +24,10 @@ def parse_args():
         help="Registered human model name.",
     )
     parser.add_argument(
-        "--motion-file", type=str, default="",
-        help="Path to .motion file. If omitted, runs standalone (rest pose).",
+        "--motion-file",
+        action="append",
+        default=[],
+        help="Path to a .motion file. Repeat to run multiple motions in sequence.",
     )
     parser.add_argument("--headless", action="store_true", help="Run Isaac Sim headless")
     parser.add_argument(
@@ -58,7 +60,7 @@ def run_protomotions(
     world,
     articulation,
     simulation_app,
-    motion_file: str,
+    motion_files: list[str],
     model: str,
     headless: bool,
     video_output: str | None,
@@ -81,10 +83,11 @@ def run_protomotions(
             headless=headless,
             reference_markers=reference_markers,
         )
-        hmi.run(
-            motion_file,
-            video_output=video_output if video_output else None,
-        )
+        for motion_file in motion_files:
+            hmi.run(
+                motion_file,
+                video_output=video_output if video_output else None,
+            )
     finally:
         simulation_app.close()
 
@@ -105,7 +108,7 @@ def main():
             world=world,
             articulation=articulation,
             simulation_app=simulation_app,
-            motion_file=args.motion_file,
+            motion_files=args.motion_file,
             model=args.model,
             headless=args.headless,
             video_output=args.video_output if args.video_output else None,

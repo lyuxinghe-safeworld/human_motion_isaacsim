@@ -11,7 +11,7 @@ Options:
   --headless true|false       Render headless. Default: true.
   --reference-markers true|false
                               Render reference markers. Default: true.
-  --video-output PATH         Output MP4 path. Default: output/<motion-stem>.mp4
+  --video-output PATH         Output MP4 path. Default: output/<motion-stem-sequence>.mp4
   --display DISPLAY           X display for non-headless runs. Default: :1.
   -h, --help                  Show this help text.
 EOF
@@ -87,7 +87,15 @@ if [[ "${#motion_files[@]}" -eq 0 ]]; then
 fi
 
 if [[ -z "$video_output" ]]; then
-  motion_name="$(basename -- "${motion_files[0]%.*}")"
+  motion_name=""
+  for motion_file in "${motion_files[@]}"; do
+    motion_stem="$(basename -- "${motion_file%.*}")"
+    if [[ -z "$motion_name" ]]; then
+      motion_name="$motion_stem"
+    else
+      motion_name="${motion_name}__${motion_stem}"
+    fi
+  done
   video_output="$repo_root/output/${motion_name}.mp4"
 fi
 

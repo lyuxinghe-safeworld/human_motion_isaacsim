@@ -27,7 +27,10 @@ class PackageState:
     headless: bool = True
     reference_markers: bool = False
     simulation_app: Any | None = None
-    carried_root_position: tuple[float, float, float] | None = None
+    initial_root_position: tuple[float, float, float] | None = None
+    next_run_root_position: tuple[float, float, float] | None = None
+    scene_reference_positions: dict[str, tuple[float, float, float]] = field(default_factory=dict)
+    completed_run_count: int = 0
     owned_helpers: list[Any] = field(default_factory=list)
 
     def teardown(self) -> None:
@@ -51,7 +54,10 @@ class PackageState:
             self.body_rigid_view = None
             self.headless = True
             self.reference_markers = False
-            self.carried_root_position = None
+            self.initial_root_position = None
+            self.next_run_root_position = None
+            self.scene_reference_positions.clear()
+            self.completed_run_count = 0
 
         if first_error is not None:
             raise first_error

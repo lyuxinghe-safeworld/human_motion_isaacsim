@@ -10,6 +10,7 @@ ProtoMotions mode (--motion-file provided):
 from __future__ import annotations
 
 import argparse
+import logging
 
 
 def parse_args():
@@ -43,6 +44,14 @@ def parse_args():
     return parser.parse_args()
 
 
+def configure_logging() -> None:
+    """Enable INFO-level API position logs for wrapper-driven motion runs."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
 def run_standalone(world, simulation_app, headless: bool):
     """Run the scene with the humanoid in rest pose."""
     print("Running standalone mode (humanoid in rest pose). Press Ctrl+C to exit.")
@@ -68,13 +77,8 @@ def run_protomotions(
 ):
     """Run ProtoMotions control through the package-owned API."""
     import human_motion_isaacsim as hmi
-    from scene_utils import align_scene_to_humanoid_root
 
     world.simulation_app = simulation_app
-    world.scene_alignment_callback = lambda simulator: align_scene_to_humanoid_root(
-        world,
-        simulator,
-    )
     try:
         hmi.init(
             model=model,
@@ -93,6 +97,7 @@ def run_protomotions(
 
 
 def main():
+    configure_logging()
     args = parse_args()
     from scene_utils import build_scene
 

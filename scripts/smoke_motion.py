@@ -13,7 +13,25 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to ProtoMotions tracker checkpoint")
-    parser.add_argument("--motion-file", type=str, required=True, help="Path to ProtoMotions .motion file")
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("--motion-file", type=str, help="Path or gs:// URI to a ProtoMotions .motion file")
+    input_group.add_argument(
+        "--manifest-path",
+        type=str,
+        help="Path or gs:// URI to a MotionBundle manifest containing the runtime derivative.",
+    )
+    parser.add_argument(
+        "--representation",
+        type=str,
+        default="proto_motion",
+        help="MotionBundle representation/derivative to run.",
+    )
+    parser.add_argument(
+        "--staging-dir",
+        type=str,
+        default="",
+        help="Optional local directory for staging GCS-backed manifests and motion files.",
+    )
     parser.add_argument("--video-output", type=str, default="", help="Output MP4 path")
     parser.add_argument("--headless", action="store_true", help="Run Isaac Sim headless")
     parser.add_argument("--num-envs", type=int, default=1, help="Number of environments")
@@ -35,6 +53,9 @@ def main():
     result = runtime.run_standalone_motion(
         checkpoint_path=args.checkpoint,
         motion_file=args.motion_file,
+        manifest_path=args.manifest_path,
+        representation=args.representation,
+        staging_dir=args.staging_dir or None,
         video_output=args.video_output or None,
         headless=args.headless,
         num_envs=args.num_envs,

@@ -17,6 +17,7 @@ from human_motion_isaacsim._state import (
     _resolve_simulation_app,
 )
 from human_motion_isaacsim.motion_file import load_motion_metadata
+from human_motion_isaacsim.motion_os_inputs import resolve_motion_input
 from human_motion_isaacsim.result import MotionRunResult
 from human_motion_isaacsim.simulator_adapter import SimulatorAdapter
 from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
@@ -505,14 +506,24 @@ def init(
 
 
 def run(
-    motion_file: str | Path,
+    motion_file: str | Path | None = None,
     video_output: str | Path | None = None,
+    *,
+    manifest_path: str | Path | None = None,
+    representation: str = "proto_motion",
+    staging_dir: str | Path | None = None,
 ) -> MotionRunResult:
     """Execute a motion-tracking loop and optionally produce a video, returning a MotionRunResult."""
     if PACKAGE_STATE.model_name is None:
         raise RuntimeError("human_motion_isaacsim.init() must be called before run().")
 
-    motion_path = Path(motion_file)
+    resolved_input = resolve_motion_input(
+        motion_file=motion_file,
+        manifest_path=manifest_path,
+        representation=representation,
+        staging_dir=staging_dir,
+    )
+    motion_path = resolved_input.motion_file
     bundle = _build_runtime_bundle(motion_path)
     motion_metadata = bundle["motion_metadata"]
     max_steps = bundle["max_steps"]

@@ -28,7 +28,25 @@ def parse_args():
         "--motion-file",
         action="append",
         default=[],
-        help="Path to a .motion file. Repeat to run multiple motions in sequence.",
+        help="Path or gs:// URI to a .motion file. Repeat to run multiple motions in sequence.",
+    )
+    parser.add_argument(
+        "--manifest-path",
+        action="append",
+        default=[],
+        help="Path or gs:// URI to a MotionBundle manifest. Repeat to run multiple manifests in sequence.",
+    )
+    parser.add_argument(
+        "--representation",
+        type=str,
+        default="proto_motion",
+        help="MotionBundle representation/derivative to run when using --manifest-path.",
+    )
+    parser.add_argument(
+        "--staging-dir",
+        type=str,
+        default="",
+        help="Optional local directory for staging GCS-backed manifests and motion files.",
     )
     parser.add_argument("--headless", action="store_true", help="Run Isaac Sim headless")
     parser.add_argument(
@@ -70,10 +88,13 @@ def run_protomotions(
     articulation,
     simulation_app,
     motion_files: list[str],
+    manifest_paths: list[str],
     model: str,
     headless: bool,
     video_output: str | None,
     reference_markers: bool,
+    representation: str,
+    staging_dir: str | None,
 ):
     """Run ProtoMotions control through the package-owned API."""
     import human_motion_isaacsim as hmi
@@ -88,9 +109,13 @@ def run_protomotions(
             reference_markers=reference_markers,
         )
         for motion_file in motion_files:
+            hmi.run(motion_file, video_output=video_output if video_output else None)
+        for manifest_path in manifest_paths:
             hmi.run(
-                motion_file,
                 video_output=video_output if video_output else None,
+                manifest_path=manifest_path,
+                representation=representation,
+                staging_dir=staging_dir,
             )
     finally:
         simulation_app.close()
@@ -106,7 +131,10 @@ def main():
         args.headless,
     )
 
-    if not args.motion_file:
+    if args.motion_file and args.manifest_path:
+        raise SystemExit("Use either --motion-file or --manifest-path for a given run, not both.")
+
+    if not args.motion_file and not args.manifest_path:
         run_standalone(world, simulation_app, args.headless)
     else:
         run_protomotions(
@@ -114,10 +142,13 @@ def main():
             articulation=articulation,
             simulation_app=simulation_app,
             motion_files=args.motion_file,
+            manifest_paths=args.manifest_path,
             model=args.model,
             headless=args.headless,
             video_output=args.video_output if args.video_output else None,
             reference_markers=args.reference_markers,
+            representation=args.representation,
+            staging_dir=args.staging_dir or None,
         )
 
 

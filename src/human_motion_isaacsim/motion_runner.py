@@ -8,6 +8,7 @@ from typing import Any, Callable
 from human_motion_isaacsim.binding import bind_fixed_humanoid
 from human_motion_isaacsim.checkpoint import load_tracker_assets
 from human_motion_isaacsim.motion_file import load_motion_metadata
+from human_motion_isaacsim.motion_os_inputs import resolve_motion_input
 from human_motion_isaacsim.protomotions_path import ensure_protomotions_importable
 
 
@@ -58,7 +59,15 @@ class MotionController:
         self._restore_rest_pose = restore_rest_pose
         self._busy = False
 
-    def run_motion(self, motion_file: str, video_output: str | None = None):
+    def run_motion(
+        self,
+        motion_file: str | Path | None = None,
+        video_output: str | None = None,
+        *,
+        manifest_path: str | Path | None = None,
+        representation: str = "proto_motion",
+        staging_dir: str | Path | None = None,
+    ):
         """Execute a single motion file, optionally capturing video, and return the result."""
         if self._busy:
             raise RuntimeError("Motion execution already in progress")
@@ -66,7 +75,13 @@ class MotionController:
         # NOTE(v1): run_motion is intentionally blocking and exclusive. While a
         # motion is active, this controller owns env stepping and assumes no
         # external process is mutating the humanoid or stage state.
-        metadata = load_motion_metadata(motion_file)
+        resolved_input = resolve_motion_input(
+            motion_file=motion_file,
+            manifest_path=manifest_path,
+            representation=representation,
+            staging_dir=staging_dir,
+        )
+        metadata = load_motion_metadata(resolved_input.motion_file)
         self._busy = True
         try:
             if self._motion_runner is None:
@@ -251,7 +266,10 @@ class MotionRunner:
         self,
         *,
         checkpoint_path: str | Path,
-        motion_file: str | Path,
+        motion_file: str | Path | None = None,
+        manifest_path: str | Path | None = None,
+        representation: str = "proto_motion",
+        staging_dir: str | Path | None = None,
         video_output: str | Path | None = None,
         headless: bool = False,
         num_envs: int = 1,
@@ -266,11 +284,18 @@ class MotionRunner:
         from human_motion_isaacsim.viewport_capture import compile_video, frame_path_for_step
         from human_motion_isaacsim.result import MotionRunResult
 
-        motion_metadata = _load_meta(motion_file)
+        resolved_input = resolve_motion_input(
+            motion_file=motion_file,
+            manifest_path=manifest_path,
+            representation=representation,
+            staging_dir=staging_dir,
+        )
+        motion_path = resolved_input.motion_file
+        motion_metadata = _load_meta(motion_path)
         max_steps = self.plan_num_steps(motion_metadata)
         bundle = self.build_standalone_runner(
             checkpoint_path=checkpoint_path,
-            motion_file=motion_file,
+            motion_file=motion_path,
             max_steps=max_steps,
             headless=headless,
             # Isaac Lab only needs camera-enabled rendering when running
@@ -286,7 +311,7 @@ class MotionRunner:
         simulator = bundle["simulator"]
         simulation_app = bundle["simulation_app"]
 
-        video_path = Path(video_output) if video_output is not None else Path(motion_file).with_suffix(".mp4")
+        video_path = Path(video_output) if video_output is not None else motion_path.with_suffix(".mp4")
         video_path.parent.mkdir(parents=True, exist_ok=True)
         frames_dir = video_path.with_suffix("") / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
@@ -315,7 +340,7 @@ class MotionRunner:
             compile_video(frame_paths, video_path, fps=30)
             return MotionRunResult(
                 success=True,
-                motion_file=Path(motion_file),
+                motion_file=motion_path,
                 video_output=video_path,
                 num_steps=max_steps,
                 duration_seconds=motion_metadata.duration_seconds,
